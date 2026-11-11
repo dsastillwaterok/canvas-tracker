@@ -47,6 +47,12 @@ const seed = require('./seed');
   await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', okPhone: false });
   assert.strictEqual((await tr.tenant('8663-13')).okPhone, true, 'an unchecked box on a later visit never revokes consent');
 
+  // Tags picked on the door form replace the tenant's set; omitting them leaves it alone.
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', grievanceTypes: ['Pests', 'Heating'] });
+  assert.deepStrictEqual((await tr.tenant('8663-13')).grievanceTypes, ['Pests', 'Heating']);
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked' });
+  assert.deepStrictEqual((await tr.tenant('8663-13')).grievanceTypes, ['Pests', 'Heating']);
+
   // New unit creates the Tenants row with status from the response; no duplicates after.
   const r2 = await tr.logInteraction({ building: '8645', unit: '7', canvasser: 'Ben K', type: 'Door knock', response: 'No answer' });
   assert.strictEqual(r2.created, true);

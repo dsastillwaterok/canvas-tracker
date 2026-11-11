@@ -51,10 +51,10 @@
     const st = sticky.get();
     return {
       building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '',
-      type: st.type || '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', okPhone: false, okEmail: false, extra: {},
+      type: st.type || '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', okPhone: false, okEmail: false, grievanceTypes: t ? (t.grievanceTypes || []).slice() : [], extra: {},
     };
   }
-  const show = (f) => S.formFields.includes(f) && (['phone', 'email', 'okPhone', 'okEmail'].includes(f) ? S.features[f] : S.interactionFields[f]);
+  const show = (f) => S.formFields.includes(f) && (['phone', 'email', 'okPhone', 'okEmail', 'grievanceTypes'].includes(f) ? S.features[f] : S.interactionFields[f]);
   const hasB = () => S.features.building;
 
   // A text box that suggests previous entries as you type but accepts anything new.
@@ -169,8 +169,8 @@
           <div style="margin-top:8px"><button class="btn quiet" data-done="${due.row}">Mark done</button></div></div></div>` : ''}
 
         ${(t.grievanceTypes || []).length || t.grievances ? h`<div class="section"><h2>Grievances</h2>
-          <div class="chips">${(t.grievanceTypes || []).map((g) => h`<span class="tag">${esc(g)}</span>`).join('')}</div>
-          ${t.grievances ? h`<p style="margin-top:8px;white-space:pre-wrap">${esc(t.grievances)}</p>` : ''}</div>` : ''}
+          ${(t.grievanceTypes || []).length ? h`<div class="chips">${t.grievanceTypes.map((g) => h`<span class="tag">${esc(g)}</span>`).join('')}</div>` : ''}
+          ${t.grievances ? h`<p class="detail">${esc(t.grievances)}</p>` : ''}</div>` : ''}
 
         <div class="section">
           <h2>${t.history.length ? (S.showAll ? 'All conversations' : 'Last conversation') : 'No conversations logged yet'}</h2>
@@ -226,6 +226,8 @@
         <input class="text" id="who" autocomplete="off" value="${esc(f.who)}"></div>`}
       ${show('discussed') ? h`<div class="field"><label for="discussed">What was discussed</label>
         <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>` : ''}
+      ${show('grievanceTypes') ? h`<div class="field"><span class="lbl">Grievances they raised <span class="hint">${(S.tenant && (S.tenant.grievanceTypes || []).length) ? 'already on file are filled in; tap to add or clear' : 'tap all that apply'}</span></span>
+        <div class="choices tags" data-ftags="grievanceTypes">${(S.lists.grievanceTypes || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${f.grievanceTypes.includes(v)}">${esc(v)}</button>`).join('')}</div></div>` : ''}
       ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
         ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
       ${show('phone') || show('email') || show('okPhone') || show('okEmail') ? h`<div class="field"><span class="lbl">Contact info <span class="hint">if they gave it. Tick the box only if they said we may use it.</span></span>
@@ -306,6 +308,14 @@
       group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
         S.edit[group.dataset.echoice] = b.dataset.val;
         group.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      }));
+    });
+    $app.querySelectorAll('[data-ftags]').forEach((group) => {
+      group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+        const arr = S.form[group.dataset.ftags];
+        const i = arr.indexOf(b.dataset.val);
+        if (i === -1) arr.push(b.dataset.val); else arr.splice(i, 1);
+        b.setAttribute('aria-pressed', i === -1);
       }));
     });
     $app.querySelectorAll('[data-etags]').forEach((group) => {

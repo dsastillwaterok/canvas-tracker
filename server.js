@@ -40,6 +40,8 @@ const ctx = {
 async function boot() {
   const fromSheet = await setup.readSheetConfig(store);
   const config = fromSheet || loadConfig();
+  // Until an organizer picks the door-form questions in the wizard, follow the defaults as they grow.
+  if (!config.formFieldsChosen) config.formFields = [...new Set([...(config.formFields || []), ...loadConfig().formFields])];
   try {
     await ctx.applyConfig(config);
     const f = await ctx.schema.features();
