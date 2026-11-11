@@ -1,0 +1,18 @@
+{
+  "name": "woodland-manor-canvass",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Door-knocking app for the Woodland Manor tenant campaign. Reads and writes the Tenant Tracker Google Sheet.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "MOCK_SHEET=1 node server.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.19.2",
+    "googleapis": "^144.0.0"
+  }
+}

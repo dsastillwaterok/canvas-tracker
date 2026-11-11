@@ -1,0 +1,303 @@
+(() => {
+  const $app = document.getElementById('app');
+  const $toast = document.getElementById('toast');
+
+  const S = {
+    me: '', lists: null, tenants: [],
+    view: 'list', q: '', onlyDue: false,
+    tenant: null, showAll: false, editing: false,
+    form: null, saving: false, error: '',
+  };
+
+  // ---- helpers ---------------------------------------------------------------
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const h = (strings, ...vals) => strings.reduce((a, s, i) => a + s + (i < vals.length ? vals[i] : ''), '');
+
+  async function api(path, body) {
+    const res = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    $toast.textContent = msg; $toast.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { $toast.hidden = true; }, 2200);
+  }
+
+  function plate(t, size) {
+    const tbd = /^TBD-/i.test(t.unit);
+    const unit = tbd ? h`<span class="tbd">${esc(t.unit)}</span>` : esc(t.unit);
+    const b = t.building ? esc(t.building) + '-' : '';
+    return h`<span class="plate ${size}">${b}${unit}</span>`;
+  }
+
+  function statusClass(cs) {
+    if (!cs) return 'plain';
+    if (cs === 'Dead end') return 'stop';
+    if (cs === 'Never contacted' || cs.startsWith('Overdue')) return 'go';
+    return 'wait';
+  }
+  const statusChip = (cs) => cs ? h`<span class="status ${statusClass(cs)}">${esc(cs)}</span>` : '';
+
+  const needsKnock = (t) => t.contactStatus === 'Never contacted' || (t.contactStatus || '').startsWith('Overdue');
+
+  function blankForm(t) {
+    return {
+      building: t ? t.building : '', unit: t ? t.unit : '', who: '',
+      type: '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '',
+    };
+  }
+
+  // ---- rendering ---------------------------------------------------------------
+  function render() {
+    if (S.view === 'list') $app.innerHTML = renderList();
+    else if (S.view === 'tenant') $app.innerHTML = renderTenant();
+    else if (S.view === 'new') $app.innerHTML = renderNew();
+    bind();
+  }
+
+  function renderList() {
+    const q = S.q.trim().toLowerCase();
+    let rows = S.tenants;
+    if (S.onlyDue) rows = rows.filter(needsKnock);
+    if (q) rows = rows.filter((t) => `${t.key} ${t.name} ${t.building} ${t.unit}`.toLowerCase().includes(q));
+    rows = rows.slice().sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+    const dueCount = S.tenants.filter(needsKnock).length;
+
+    const items = rows.map((t) => h`
+      <li><button class="rowbtn" data-open="${esc(t.key)}">
+        ${plate(t, 'md')}
+        <span>
+          <span class="name">${esc(t.name) || '<em>No name yet</em>'}</span>
+          <span class="meta">${esc(t.status)}${t.lastContact ? ' · last contact ' + esc(t.lastContact) : ''}</span>
+          <span class="meta">${statusChip(t.contactStatus)}</span>
+        </span>
+      </button></li>`).join('');
+
+    return h`
+      <div class="topbar">
+        <div class="row"><span class="plate md">Woodland Manor</span><span class="who">${esc(S.me)}</span></div>
+        <input class="search" id="q" type="search" inputmode="search" autocomplete="off"
+               placeholder="Unit, building, or name" value="${esc(S.q)}" aria-label="Search tenants">
+        <div class="filters">
+          <button class="chip-btn" id="onlyDue" aria-pressed="${S.onlyDue}">Needs a knock (${dueCount})</button>
+          <button class="chip-btn" id="newUnit">New unit</button>
+        </div>
+      </div>
+      ${rows.length ? h`<ul class="list">${items}</ul>` : h`<p class="empty">${q ? 'No unit or name matches that. Check the building number, or add it as a new unit.' : 'No tenants yet. Add the first one.'}</p>`}`;
+  }
+
+  function renderTenant() {
+    const t = S.tenant;
+    const hist = S.showAll ? t.history : t.history.slice(0, 1);
+    const due = t.history.find((x) => x.followUpDate && !x.done);
+    return h`
+      <div class="screen">
+        <button class="back" id="back">‹ All units</button>
+        <div class="head">
+          ${plate(t, 'lg')}
+          <div class="name">${esc(t.name) || '<em>No name yet</em>'}</div>
+          <div class="line">
+            <span>${esc(t.status)}</span>
+            ${statusChip(t.contactStatus)}
+            ${t.phone ? h`<a class="tel" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : ''}
+            ${t.housing ? h`<span>Housing assistance: ${esc(t.housing)}</span>` : ''}
+          </div>
+        </div>
+
+        ${t.accessibility ? h`<div class="section"><div class="notice">Before you knock: ${esc(t.accessibility)}</div></div>` : ''}
+        ${due ? h`<div class="section"><div class="notice go">Follow-up due ${esc(due.followUpDate)}: ${esc(due.followUp || 'see last conversation')}
+          <div style="margin-top:8px"><button class="btn quiet" data-done="${due.row}">Mark done</button></div></div></div>` : ''}
+
+        ${t.grievanceTypes.length || t.grievances ? h`<div class="section"><h2>Grievances</h2>
+          <div class="chips">${t.grievanceTypes.map((g) => h`<span class="tag">${esc(g)}</span>`).join('')}</div>
+          ${t.grievances ? h`<p style="margin-top:8px;white-space:pre-wrap">${esc(t.grievances)}</p>` : ''}</div>` : ''}
+
+        <div class="section">
+          <h2>${t.history.length ? (S.showAll ? 'All conversations' : 'Last conversation') : 'No conversations logged yet'}</h2>
+          ${hist.map((c) => h`<div class="convo">
+            <div class="meta">${esc(c.date)} · ${esc(c.canvasser)} · ${esc(c.type)} · ${esc(c.response)}${c.who ? ' · ' + esc(c.who) : ''}</div>
+            ${c.discussed ? h`<div class="body">${esc(c.discussed)}</div>` : ''}
+            ${c.followUp ? h`<div class="meta" style="margin-top:4px">Follow-up: ${esc(c.followUp)}${c.followUpDate ? ' by ' + esc(c.followUpDate) : ''}${c.done ? ' (done)' : ''}</div>` : ''}
+          </div>`).join('')}
+          ${t.history.length > 1 && !S.showAll ? h`<p style="margin-top:8px"><button class="linkish" id="showAll">Show all ${t.history.length}</button></p>` : ''}
+        </div>
+
+        ${t.notes ? h`<div class="section"><h2>Notes</h2><p style="white-space:pre-wrap">${esc(t.notes)}</p></div>` : ''}
+
+        <div class="section">
+          <details class="more" ${S.editing ? 'open' : ''} id="editDetails"><summary>Edit tenant details</summary>
+            ${renderEdit(t)}
+          </details>
+        </div>
+
+        <div class="section" id="logSection">
+          <h2>Log a conversation</h2>
+          ${renderLogForm()}
+        </div>
+      </div>
+      <div class="fab-wrap"><button class="btn primary block" id="save" ${S.saving ? 'disabled' : ''}>${S.saving ? 'Saving…' : 'Save conversation'}</button></div>`;
+  }
+
+  function renderNew() {
+    const f = S.form;
+    return h`
+      <div class="screen">
+        <button class="back" id="back">‹ All units</button>
+        <div class="head"><span class="plate lg">New unit</span></div>
+        <div class="field"><span class="lbl">Building <span class="hint">the 4-digit number on the outside</span></span>
+          <div class="choices" data-choice="building">
+            ${S.lists.buildings.map((b) => h`<button type="button" data-val="${esc(b)}" aria-pressed="${f.building === b}">${esc(b)}</button>`).join('')}
+            <button type="button" data-val="" aria-pressed="${f.building === ''}">Don't know</button>
+          </div></div>
+        <div class="field"><label for="unit">Apartment number</label>
+          <input class="text" id="unit" inputmode="text" autocomplete="off" placeholder="e.g. 4" value="${esc(f.unit)}"></div>
+        <div class="field"><label for="who">Name</label>
+          <input class="text" id="who" autocomplete="off" placeholder="Who you talked to, if anyone" value="${esc(f.who)}"></div>
+        <div class="section" id="logSection"><h2>The conversation</h2>${renderLogForm({ skipWho: true })}</div>
+      </div>
+      <div class="fab-wrap"><button class="btn primary block" id="save" ${S.saving ? 'disabled' : ''}>${S.saving ? 'Saving…' : 'Save new unit and conversation'}</button></div>`;
+  }
+
+  function renderLogForm(opts = {}) {
+    const f = S.form;
+    const choice = (name, values) => h`<div class="choices" data-choice="${name}">
+      ${values.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${f[name] === v}">${esc(v)}</button>`).join('')}</div>`;
+    return h`
+      <div class="field"><span class="lbl">How</span>${choice('type', S.lists.types)}</div>
+      <div class="field"><span class="lbl">What happened</span>${choice('response', S.lists.responses)}</div>
+      ${opts.skipWho ? '' : h`<div class="field"><label for="who">Who you talked to <span class="hint">leave blank if it was ${esc(S.tenant && S.tenant.name ? S.tenant.name : 'the tenant')} or nobody answered</span></label>
+        <input class="text" id="who" autocomplete="off" value="${esc(f.who)}"></div>`}
+      <div class="field"><label for="discussed">What was discussed</label>
+        <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>
+      <div class="field two">
+        <div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>
+        <div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>
+      </div>
+      <details class="more"><summary>They gave a phone or email</summary>
+        <div class="field two">
+          <div><label for="phone">Phone</label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>
+          <div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>
+        </div>
+      </details>
+      ${S.error ? h`<p class="err">${esc(S.error)}</p>` : ''}`;
+  }
+
+  function renderEdit(t) {
+    const e = S.edit || (S.edit = {
+      name: t.name, phone: t.phone, email: t.email, status: t.status, groupChat: t.groupChat,
+      socialLead: t.socialLead, grievanceTypes: t.grievanceTypes.slice(), accessibility: t.accessibility, notes: t.notes,
+    });
+    return h`
+      <div class="field two">
+        <div><label for="e_name">Name</label><input class="text" id="e_name" value="${esc(e.name)}"></div>
+        <div><label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}"></div>
+      </div>
+      <div class="field"><label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}"></div>
+      <div class="field"><span class="lbl">Status</span><div class="choices" data-echoice="status">
+        ${S.lists.statuses.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.status === v}">${esc(v)}</button>`).join('')}</div></div>
+      <div class="field"><span class="lbl">Grievance types</span><div class="choices tags" data-etags="grievanceTypes">
+        ${S.lists.grievanceTypes.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.grievanceTypes.includes(v)}">${esc(v)}</button>`).join('')}</div></div>
+      <div class="field"><label class="toggle"><input type="checkbox" id="e_groupChat" ${e.groupChat ? 'checked' : ''}> In the group chat</label>
+        <label class="toggle"><input type="checkbox" id="e_socialLead" ${e.socialLead ? 'checked' : ''}> Social lead</label></div>
+      <div class="field"><label for="e_acc">Accessibility / visit notes</label><input class="text" id="e_acc" value="${esc(e.accessibility)}" placeholder="e.g. hard of hearing, knock loud"></div>
+      <div class="field"><label for="e_notes">Notes</label><textarea class="textarea" id="e_notes">${esc(e.notes)}</textarea></div>
+      <div class="field"><button class="btn" id="saveEdit">Save details</button></div>`;
+  }
+
+  // ---- events ----------------------------------------------------------------
+  function bind() {
+    const on = (sel, ev, fn) => { const el = $app.querySelector(sel); if (el) el.addEventListener(ev, fn); };
+
+    on('#q', 'input', (e) => { S.q = e.target.value; const pos = e.target.selectionStart; render(); const q = $app.querySelector('#q'); q.focus(); q.setSelectionRange(pos, pos); });
+    on('#onlyDue', 'click', () => { S.onlyDue = !S.onlyDue; render(); });
+    on('#newUnit', 'click', () => { S.view = 'new'; S.form = blankForm(null); S.error = ''; render(); window.scrollTo(0, 0); });
+    $app.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openTenant(b.dataset.open)));
+    on('#back', 'click', () => { S.view = 'list'; S.tenant = null; S.edit = null; S.editing = false; S.error = ''; render(); });
+    on('#showAll', 'click', () => { S.showAll = true; render(); });
+    on('#editDetails', 'toggle', (e) => { S.editing = e.target.open; });
+
+    // Choice buttons write straight into the form so re-rendering keeps state.
+    $app.querySelectorAll('[data-choice]').forEach((group) => {
+      group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+        S.form[group.dataset.choice] = b.dataset.val;
+        group.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      }));
+    });
+    $app.querySelectorAll('[data-echoice]').forEach((group) => {
+      group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+        S.edit[group.dataset.echoice] = b.dataset.val;
+        group.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      }));
+    });
+    $app.querySelectorAll('[data-etags]').forEach((group) => {
+      group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+        const arr = S.edit[group.dataset.etags];
+        const i = arr.indexOf(b.dataset.val);
+        if (i === -1) arr.push(b.dataset.val); else arr.splice(i, 1);
+        b.setAttribute('aria-pressed', i === -1);
+      }));
+    });
+    ['unit', 'who', 'discussed', 'followUp', 'followUpDate', 'phone', 'email'].forEach((id) => on('#' + id, 'input', (e) => { S.form[id] = e.target.value; }));
+    on('#e_name', 'input', (e) => { S.edit.name = e.target.value; });
+    on('#e_phone', 'input', (e) => { S.edit.phone = e.target.value; });
+    on('#e_email', 'input', (e) => { S.edit.email = e.target.value; });
+    on('#e_acc', 'input', (e) => { S.edit.accessibility = e.target.value; });
+    on('#e_notes', 'input', (e) => { S.edit.notes = e.target.value; });
+    on('#e_groupChat', 'change', (e) => { S.edit.groupChat = e.target.checked; });
+    on('#e_socialLead', 'change', (e) => { S.edit.socialLead = e.target.checked; });
+
+    on('#save', 'click', save);
+    on('#saveEdit', 'click', saveEdit);
+    $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', async () => {
+      try { await api(`/api/followup/${b.dataset.done}/done`, {}); toast('Follow-up marked done'); await openTenant(S.tenant.key, true); }
+      catch (e) { toast(e.message); }
+    }));
+  }
+
+  async function openTenant(key, keepForm) {
+    try {
+      const t = await api('/api/tenant/' + encodeURIComponent(key));
+      S.tenant = t; S.view = 'tenant'; S.showAll = false; S.error = '';
+      if (!keepForm) { S.form = blankForm(t); S.edit = null; S.editing = false; }
+      render(); window.scrollTo(0, 0);
+    } catch (e) { toast(e.message); }
+  }
+
+  async function save() {
+    const f = S.form;
+    S.error = '';
+    if (S.view === 'new' && !f.unit.trim()) S.error = 'Enter the apartment number.';
+    else if (!f.type) S.error = 'Pick how you reached them.';
+    else if (!f.response) S.error = 'Pick what happened.';
+    if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
+    S.saving = true; render();
+    try {
+      const r = await api('/api/interaction', f);
+      S.saving = false;
+      toast(r.created ? 'Saved. New unit added.' : 'Saved');
+      await refreshList();
+      await openTenant(r.key);
+    } catch (e) { S.saving = false; S.error = e.message; render(); }
+  }
+
+  async function saveEdit() {
+    try {
+      const t = await api('/api/tenant/' + encodeURIComponent(S.tenant.key), S.edit);
+      S.tenant = t; S.edit = null; S.editing = false; toast('Details saved');
+      await refreshList(); render();
+    } catch (e) { toast(e.message); }
+  }
+
+  async function refreshList() {
+    const b = await api('/api/bootstrap');
+    S.me = b.me; S.lists = b.lists; S.tenants = b.tenants;
+  }
+
+  (async () => {
+    try { await refreshList(); render(); }
+    catch (e) { $app.innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+  })();
+})();
