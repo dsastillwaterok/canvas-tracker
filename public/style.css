@@ -110,6 +110,8 @@ a { color: inherit; }
 
 /* Tenant screen */
 .screen { padding: 0 16px 120px; }
+.backrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.backrow .who { font-size: 14px; color: var(--ink-2); }
 .back { display: inline-flex; align-items: center; gap: 6px; height: var(--tap); background: none; border: 0; padding: 0; font-weight: 600; color: var(--ink-2); }
 .head { padding: 4px 0 12px; border-bottom: 2px solid var(--ink); }
 .head .name { font-size: 22px; font-weight: 600; margin-top: 6px; }

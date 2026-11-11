@@ -116,7 +116,7 @@
     const due = t.history.find((x) => x.followUpDate && !x.done);
     return h`
       <div class="screen">
-        <button class="back" id="back">‹ All units</button>
+        <div class="backrow"><button class="back" id="back">‹ All units</button><span class="who">Logging as ${esc(S.me)}</span></div>
         <div class="head">
           ${plate(t, 'lg')}
           <div class="name">${esc(t.name) || '<em>No name yet</em>'}</div>
@@ -170,7 +170,7 @@
     const f = S.form;
     return h`
       <div class="screen">
-        <button class="back" id="back">‹ All units</button>
+        <div class="backrow"><button class="back" id="back">‹ All units</button><span class="who">Logging as ${esc(S.me)}</span></div>
         <div class="head"><span class="plate lg">New unit</span></div>
         ${hasB() ? h`<div class="field"><label for="building">Building <span class="hint">the number on the outside; new ones are added to the list</span></label>
           ${combo('building', 'building', f.building, 'e.g. 8659', 'inputmode="numeric"')}</div>` : ''}
