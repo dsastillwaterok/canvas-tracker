@@ -43,14 +43,33 @@
 
   const needsKnock = (t) => t.contactStatus === 'Never contacted' || (t.contactStatus || '').startsWith('Overdue');
 
+  const sticky = {
+    get() { try { return JSON.parse(localStorage.getItem('canvass.sticky') || '{}'); } catch { return {}; } },
+    set(v) { try { localStorage.setItem('canvass.sticky', JSON.stringify(v)); } catch { /* private mode */ } },
+  };
   function blankForm(t) {
+    const st = sticky.get();
     return {
-      building: t ? t.building : '', unit: t ? t.unit : '', who: '',
-      type: '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', extra: {},
+      building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '',
+      type: st.type || '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', extra: {},
     };
   }
   const show = (f) => S.formFields.includes(f) && (f === 'phone' || f === 'email' ? S.features[f] : S.interactionFields[f]);
   const hasB = () => S.features.building;
+
+  // A text box that suggests previous entries as you type but accepts anything new.
+  function combo(id, field, value, placeholder, attrs = '') {
+    return h`<div class="combo"><input class="text" id="${id}" data-combo="${field}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${esc(placeholder)}" value="${esc(value)}" ${attrs}><ul class="suggest" hidden></ul></div>`;
+  }
+  function comboOptions(field) {
+    if (field === 'building') return (S.lists.buildings || []).slice();
+    if (field === 'unit') {
+      const b = (S.form.building || '').trim();
+      const units = S.tenants.filter((t) => !b || t.building === b).map((t) => t.unit);
+      return [...new Set(units)].sort((a, c) => a.localeCompare(c, undefined, { numeric: true }));
+    }
+    return [];
+  }
 
   // ---- rendering ---------------------------------------------------------------
   function render() {
@@ -150,13 +169,10 @@
       <div class="screen">
         <button class="back" id="back">‹ All units</button>
         <div class="head"><span class="plate lg">New unit</span></div>
-        ${hasB() ? h`<div class="field"><span class="lbl">Building <span class="hint">the number on the outside</span></span>
-          <div class="choices" data-choice="building">
-            ${(S.lists.buildings || []).map((b) => h`<button type="button" data-val="${esc(b)}" aria-pressed="${f.building === b}">${esc(b)}</button>`).join('')}
-            <button type="button" data-val="" aria-pressed="${f.building === ''}">Don't know</button>
-          </div></div>` : ''}
-        <div class="field"><label for="unit">Apartment number</label>
-          <input class="text" id="unit" inputmode="text" autocomplete="off" placeholder="e.g. 4" value="${esc(f.unit)}"></div>
+        ${hasB() ? h`<div class="field"><label for="building">Building <span class="hint">the number on the outside; new ones are added to the list</span></label>
+          ${combo('building', 'building', f.building, 'e.g. 8659', 'inputmode="numeric"')}</div>` : ''}
+        <div class="field"><label for="unit">Apartment number <span class="hint">pick an existing unit or type a new one</span></label>
+          ${combo('unit', 'unit', f.unit, 'e.g. 4')}</div>
         <div class="field"><label for="who">Name</label>
           <input class="text" id="who" autocomplete="off" placeholder="Who you talked to, if anyone" value="${esc(f.who)}"></div>
         <div class="section" id="logSection"><h2>The conversation</h2>${renderLogForm({ skipWho: true })}</div>
@@ -169,24 +185,22 @@
     const choice = (name, values) => h`<div class="choices" data-choice="${name}">
       ${values.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${f[name] === v}">${esc(v)}</button>`).join('')}</div>`;
     return h`
-      <div class="field"><span class="lbl">How</span>${choice('type', S.lists.types)}</div>
+      <div class="field"><span class="lbl">How <span class="hint">stays set for your next one</span></span>${choice('type', S.lists.types)}</div>
       <div class="field"><span class="lbl">What happened</span>${choice('response', S.lists.responses)}</div>
       ${opts.skipWho || !show('who') ? '' : h`<div class="field"><label for="who">Who you talked to <span class="hint">leave blank if it was ${esc(S.tenant && S.tenant.name ? S.tenant.name : 'the tenant')} or nobody answered</span></label>
         <input class="text" id="who" autocomplete="off" value="${esc(f.who)}"></div>`}
       ${show('discussed') ? h`<div class="field"><label for="discussed">What was discussed</label>
         <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>` : ''}
+      ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
+        ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
+      ${show('phone') || show('email') ? h`<div class="field two">
+        ${show('phone') ? h`<div><label for="phone">Phone <span class="hint">if they gave it</span></label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>` : ''}
+        ${show('email') ? h`<div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>` : ''}
+      </div>` : ''}
       ${show('followUp') || show('followUpDate') ? h`<div class="field two">
         ${show('followUp') ? h`<div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>` : ''}
         ${show('followUpDate') ? h`<div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>` : ''}
       </div>` : ''}
-      ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
-        ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
-      ${show('phone') || show('email') ? h`<details class="more"><summary>They gave a phone or email</summary>
-        <div class="field two">
-          ${show('phone') ? h`<div><label for="phone">Phone</label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>` : ''}
-          ${show('email') ? h`<div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>` : ''}
-        </div>
-      </details>` : ''}
       ${S.error ? h`<p class="err">${esc(S.error)}</p>` : ''}`;
   }
 
@@ -253,7 +267,25 @@
         b.setAttribute('aria-pressed', i === -1);
       }));
     });
-    ['unit', 'who', 'discussed', 'followUp', 'followUpDate', 'phone', 'email'].forEach((id) => on('#' + id, 'input', (e) => { S.form[id] = e.target.value; }));
+    ['who', 'discussed', 'followUp', 'followUpDate', 'phone', 'email'].forEach((id) => on('#' + id, 'input', (e) => { S.form[id] = e.target.value; }));
+    $app.querySelectorAll('[data-combo]').forEach((input) => {
+      const field = input.dataset.combo;
+      const list = input.nextElementSibling;
+      const showList = () => {
+        const q = input.value.trim().toLowerCase();
+        const opts = comboOptions(field).filter((o) => !q || o.toLowerCase().includes(q)).slice(0, 8);
+        list.innerHTML = opts.map((o) => h`<li role="option" data-val="${esc(o)}">${esc(o)}</li>`).join('');
+        list.hidden = !opts.length;
+      };
+      input.addEventListener('focus', showList);
+      input.addEventListener('input', () => { S.form[field] = input.value; showList(); });
+      input.addEventListener('blur', () => setTimeout(() => { list.hidden = true; }, 150));
+      list.addEventListener('mousedown', (e) => {
+        const li = e.target.closest('li'); if (!li) return;
+        e.preventDefault(); input.value = li.dataset.val; S.form[field] = li.dataset.val; list.hidden = true;
+        if (field === 'building') { const u = $app.querySelector('[data-combo="unit"]'); if (u) u.focus(); }
+      });
+    });
     on('#e_name', 'input', (e) => { S.edit.name = e.target.value; });
     on('#e_phone', 'input', (e) => { S.edit.phone = e.target.value; });
     on('#e_email', 'input', (e) => { S.edit.email = e.target.value; });
@@ -293,6 +325,7 @@
     S.saving = true; render();
     try {
       const r = await api('/api/interaction', f);
+      sticky.set({ type: f.type, building: f.building });
       S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');
       await refreshList();
