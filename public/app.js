@@ -226,6 +226,11 @@
           ${S.editable.length ? h`<details class="more" ${S.editing ? 'open' : ''} id="editDetails"><summary>Edit tenant details</summary>
             ${renderEdit(t)}
           </details>` : ''}
+          <details class="more" id="replaceDetails" ${S.replacing ? 'open' : ''}><summary>Someone new lives here</summary>
+            <p class="hint" style="margin:8px 0">Use this when ${esc(t.name || 'the previous tenant')} has moved out. Their name, contact details and consents are cleared and noted in Notes; the unit's grievances and conversation history stay.</p>
+            <div class="field"><label for="newName">New tenant's name</label><input class="text" id="newName" autocapitalize="words" value="${esc(S.newName || '')}"></div>
+            <div class="field"><button class="btn" id="replaceTenant" ${S.replacingBusy ? 'disabled' : ''}>${S.replacingBusy ? 'Updating…' : 'Replace the tenant'}</button></div>
+          </details>
         </div>
 
         <div class="section" id="logSection">
@@ -379,6 +384,19 @@
     on('#back', 'click', () => history.back());
     on('#showAll', 'click', () => { S.showAll = true; render(); });
     on('#editDetails', 'toggle', (e) => { S.editing = e.target.open; });
+    on('#replaceDetails', 'toggle', (e) => { S.replacing = e.target.open; });
+    on('#newName', 'input', (e) => { S.newName = e.target.value; });
+    on('#replaceTenant', 'click', async () => {
+      const name = (S.newName || '').trim();
+      if (!name) { toast('Enter the new tenant\'s name.'); $app.querySelector('#newName').focus(); return; }
+      if (!confirm(`Replace ${S.tenant.name || 'the current tenant'} with ${name}? Their phone, email and consents will be cleared.`)) return;
+      S.replacingBusy = true; render();
+      try {
+        const t = await api('/api/tenant/' + encodeURIComponent(S.tenant.key) + '/replace', { name });
+        S.tenant = t; S.replacing = false; S.newName = ''; S.replacingBusy = false; S.form = blankForm(t); S.edit = null; S.editing = false;
+        toast('Tenant replaced'); await refreshList(); render();
+      } catch (e) { S.replacingBusy = false; render(); toast(e.message); }
+    });
 
     // Choice buttons write straight into the form so re-rendering keeps state.
     $app.querySelectorAll('[data-choice]').forEach((group) => {

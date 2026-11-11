@@ -60,6 +60,18 @@ const seed = require('./seed');
   const s0 = new Schema(noTab, config); assert.strictEqual((await s0.features()).people, false);
   assert.strictEqual((await new Tracker(noTab, s0).tenant('8663-13')).people.length, 0);
 
+  // Someone new lives here: person-level fields clear, a note records who was there, unit-level data stays.
+  const before = await tr.tenant('8663-13');
+  const rep = await tr.replaceTenant('8663-13', 'Nadia Oyelaran');
+  assert.strictEqual(rep.name, 'Nadia Oyelaran');
+  assert.strictEqual(rep.phone, ''); assert.strictEqual(rep.okPhone, false); assert.strictEqual(rep.groupChat, false);
+  assert.strictEqual(rep.status, 'Contacted');
+  assert.match(rep.notes, /Previous tenant: Opal Brandt, \(918\) 555-0199/);
+  assert.deepStrictEqual(rep.grievanceTypes, before.grievanceTypes, 'grievances belong to the unit');
+  assert.strictEqual(rep.history.length, before.history.length, 'history stays with the unit');
+  assert.strictEqual(rep.people.length, 0, 'the old household\'s other residents are cleared');
+  assert.strictEqual((await tr.tenants()).length, 8, 'no new row');
+
   // Tags picked on the door form replace the tenant's set; omitting them leaves it alone.
   await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', grievanceTypes: ['Pests', 'Heating'] });
   assert.deepStrictEqual((await tr.tenant('8663-13')).grievanceTypes, ['Pests', 'Heating']);

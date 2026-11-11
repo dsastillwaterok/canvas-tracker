@@ -11,6 +11,7 @@ Built for the Woodland Manor campaign of the Oklahoma Tenants Union. Made to be 
 - **A log form** with big tappable buttons for how and what happened, free text for the rest. Saving writes the conversation to the sheet and creates the tenant's row if the unit is new.
 - **Other people in the unit**: a button on the form (closed by default) opens name, phone, email and consent boxes for a roommate or family member. They're kept on an optional `Residents` tab, one row per person, and listed on the tenant screen.
 - **Edit details** from the phone: status, tags, contact info, notes.
+- **Someone new lives here**: when a tenant moves out, one action clears the person-level fields (name, contact details, consents, group chat and the like, listed in `personFields`), writes who was there before into Notes, clears the unit's other residents, and keeps the unit's grievances and conversation history.
 
 No Google sign-in and no passwords. Before each canvass an organizer shows a QR code; scanning it signs a canvasser in until the canvass ends (a few days), then everyone's access lapses on its own. Removing a name from the sheet revokes it at once.
 
@@ -116,6 +117,7 @@ The key that links a conversation to a tenant is `building-unit` (`8659-4`) or j
 - `columns.<tab>`: `{ field: "Header text" }`. Remove a field to tell the app the sheet doesn't have it.
 - `checkboxFields`, `formulaFields`: which fields are checkboxes (read/written as TRUE/FALSE) and which are formulas (never written)
 - `editableFields`: tenant fields organizers may change from the phone
+- `personFields`: tenant fields that belong to the person rather than the unit; "Someone new lives here" clears them
 - `form.fields`: the door form, one entry per question, in order. Each has `id` (a column key from `columns`, with `target: "tenant"` for a tenant-row column, or `h:Header text` for any other column), `kind` (`text`, `textarea`, `tel`, `email`, `date`, `number`, `checkbox`, `choice`, `select`, `tags`), `label`, `hint`, `placeholder`, `required`, `pattern` + `patternHint`, `sticky` (keep the answer for the next conversation), `list` or `options` for choices, `grouped` (chips by `tagGroups`), `onlyOn` (a tenant checkbox the form can set but never clear), and layout: `section` / `sectionHint`, `row` (questions sharing a row name sit side by side), `under` (inside the previous question's box). The **Door form** page in `/admin` edits all of this; older configs with `formFields` / `extraFields` are read as before.
 - `tagGroups`: `[{ "label": "Inside the unit", "tags": [...] }]`, how pick-many chips are grouped; tags not in any group appear under "Other"
 - `newUnitStatus`: status given to a tenant row created from a conversation, by response

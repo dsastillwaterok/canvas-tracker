@@ -127,6 +127,25 @@
     "connected",
     "notes"
   ],
+  "personFields": [
+    "name",
+    "phone",
+    "email",
+    "okPhone",
+    "okEmail",
+    "language",
+    "accessibility",
+    "residents",
+    "housing",
+    "groupChat",
+    "groupMsgOk",
+    "socialLead",
+    "connected",
+    "ocMember",
+    "translator",
+    "stay",
+    "lawyer"
+  ],
   "newUnitStatus": {
     "whenResponseIs": {
       "No answer": "No answer"

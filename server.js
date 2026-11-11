@@ -264,6 +264,14 @@ app.post('/api/tenant/:key', requireCanvasser, async (req, res, next) => {
   catch (e) { if (/No tenant/.test(e.message)) return res.status(404).json({ error: e.message }); next(e); }
 });
 
+app.post('/api/tenant/:key/replace', requireCanvasser, async (req, res, next) => {
+  try {
+    const name = String((req.body || {}).name || '').trim().slice(0, 80);
+    if (!name) return res.status(400).json({ error: 'Enter the new tenant\'s name.' });
+    res.json(await ctx.tracker.replaceTenant(req.params.key, name));
+  } catch (e) { if (/No tenant/.test(e.message)) return res.status(404).json({ error: e.message }); next(e); }
+});
+
 app.post('/api/followup/:row/done', requireCanvasser, async (req, res, next) => {
   try {
     const row = parseInt(req.params.row, 10);
