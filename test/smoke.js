@@ -60,6 +60,16 @@ const seed = require('./seed');
   const s0 = new Schema(noTab, config); assert.strictEqual((await s0.features()).people, false);
   assert.strictEqual((await new Tracker(noTab, s0).tenant('8663-13')).people.length, 0);
 
+  // The canvasser can say who the main contact is: a resident swaps places with the tenant.
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', makePrimary: 'Lena Brandt' });
+  const sw = await tr.tenant('8663-13');
+  assert.strictEqual(sw.name, 'Lena Brandt'); assert.strictEqual(sw.phone, '555-0101'); assert.strictEqual(sw.okEmail, true); assert.strictEqual(sw.okPhone, false);
+  const opalNow = sw.people.find((p) => p.name === 'Opal Brandt');
+  assert.ok(opalNow, 'the old main contact is now a resident'); assert.strictEqual(opalNow.phone, '(918) 555-0199'); assert.strictEqual(opalNow.okPhone, true);
+  assert.strictEqual(sw.people.length, 2);
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', makePrimary: 'Opal Brandt' });
+  assert.strictEqual((await tr.tenant('8663-13')).name, 'Opal Brandt', 'and back');
+
   // Someone new lives here: person-level fields clear, a note records who was there, unit-level data stays.
   const before = await tr.tenant('8663-13');
   const rep = await tr.replaceTenant('8663-13', 'Nadia Oyelaran');

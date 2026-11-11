@@ -50,7 +50,7 @@
   // A fresh form: sticky answers carried over, tenant-row answers pre-filled from the tenant.
   function blankForm(t) {
     const st = sticky.get();
-    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '', peopleOpen: false,
+    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '', peopleOpen: false, primary: -1,
       people: t && t.people ? t.people.map((p) => ({ name: p.name || '', phone: p.phone || '', email: p.email || '', okPhone: !!p.okPhone, okEmail: !!p.okEmail })) : [] };
     for (const q of S.formSpec) {
       let v = q.kind === 'tags' ? [] : q.kind === 'checkbox' ? false : '';
@@ -288,9 +288,12 @@
     if (!f.peopleOpen) return h`<div class="field"><button type="button" class="btn quiet" id="peopleOpen">${n ? `Other people in this unit (${n})` : 'Add another person in this unit'}</button></div>`;
     const list = f.people.length ? f.people : [blankPerson()];
     if (!f.people.length) f.people = list;
+    const main = S.tenant && S.tenant.name;
     return h`<div class="field people"><span class="lbl">Other people in this unit <span class="hint">roommates, family, anyone else who answers the door</span></span>
+      ${main ? h`<label class="toggle"><input type="radio" name="primary" data-primary="-1" ${f.primary === -1 ? 'checked' : ''}> <strong>${esc(main)}</strong> is the main contact for this unit</label>` : ''}
       ${list.map((p, i) => h`<div class="person">
         <label for="p_name_${i}">Name</label><input class="text" id="p_name_${i}" data-p="${i}" data-pf="name" autocapitalize="words" value="${esc(p.name)}">
+        ${main ? h`<label class="toggle"><input type="radio" name="primary" data-primary="${i}" ${f.primary === i ? 'checked' : ''}> Make this person the main contact <span class="hint">swaps with ${esc(main)}</span></label>` : ''}
         <div class="contact-pair">
           <div class="contact"><label for="p_phone_${i}">Phone</label><input class="text" id="p_phone_${i}" type="tel" data-p="${i}" data-pf="phone" value="${esc(p.phone)}">
             <label class="toggle"><input type="checkbox" data-p="${i}" data-pf="okPhone" ${p.okPhone ? 'checked' : ''}> OK to call or text</label></div>
@@ -477,6 +480,7 @@
       if (el.type === 'checkbox') el.addEventListener('change', () => { p()[el.dataset.pf] = el.checked; });
       else el.addEventListener('input', () => { p()[el.dataset.pf] = el.value; });
     });
+    $app.querySelectorAll('[data-primary]').forEach((el) => el.addEventListener('change', () => { if (el.checked) S.form.primary = parseInt(el.dataset.primary, 10); }));
     on('#save', 'click', save);
     on('#saveEdit', 'click', saveEdit);
     $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', async () => {
@@ -506,7 +510,8 @@
     if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
     S.saving = true; render();
     try {
-      const r = await api('/api/interaction', { ...f, people: f.people.filter((p) => p.name.trim()) });
+      const chosen = f.primary >= 0 && f.people[f.primary] && f.people[f.primary].name.trim() ? f.people[f.primary].name.trim() : '';
+      const r = await api('/api/interaction', { ...f, people: f.people.filter((p) => p.name.trim()), makePrimary: chosen });
       sticky.set({ building: f.building, values: stickyValues(f) });
       S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');
