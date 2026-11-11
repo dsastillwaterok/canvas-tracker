@@ -309,8 +309,7 @@
       {
         "id": "who",
         "kind": "text",
-        "label": "Who you talked to",
-        "hint": "leave blank if it was the tenant or nobody answered"
+        "label": "Who you talked to"
       },
       {
         "id": "discussed",

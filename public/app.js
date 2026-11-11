@@ -66,7 +66,7 @@
   function blankForm(t) {
     S.tagsOpen = {};
     const st = sticky.get();
-    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '', peopleOpen: false, primary: -1,
+    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: t && t.name ? t.name : '', whoOther: false, peopleOpen: false, primary: -1,
       people: t && t.people ? t.people.map((p) => ({ name: p.name || '', phone: p.phone || '', email: p.email || '', okPhone: !!p.okPhone, okEmail: !!p.okEmail })) : [] };
     for (const q of S.formSpec) {
       let v = q.kind === 'tags' ? [] : q.kind === 'checkbox' ? false : '';
@@ -74,6 +74,7 @@
       if (q.target === 'tenant' && t && q.id in t && !/^h:/.test(q.id)) v = q.kind === 'tags' ? (t[q.id] || []).slice() : q.kind === 'checkbox' ? !!t[q.id] : (t[q.id] || '');
       f[q.id] = v;
     }
+    if (t && t.name) f.who = t.name; // the tenant is the default answer to "who you talked to"
     return f;
   }
   function validateForm(f) {
@@ -286,7 +287,22 @@
   const choicesFor = (q) => (q.options && q.options.length ? q.options : (q.list && S.lists[q.list]) || []);
 
   // One question. `nested` means it sits inside the previous question's box.
+  const nobodyAnswered = (f) => /no answer|not home|nobody/i.test(f.response || '');
+  // "Who you talked to" on a known unit: the people on file as buttons, plus "Someone else" for a name.
+  function renderWho(q, f) {
+    const names = [];
+    if (S.tenant && S.tenant.name) names.push(S.tenant.name);
+    for (const p of (S.tenant && S.tenant.people) || []) if (p.name && !names.includes(p.name)) names.push(p.name);
+    for (const p of f.people || []) if (p.name && p.name.trim() && !names.includes(p.name.trim())) names.push(p.name.trim());
+    const other = f.whoOther || (f.who && !names.includes(f.who));
+    return h`<span class="lbl">${esc(q.label)}</span><div class="choices" data-who>
+      ${names.map((n) => h`<button type="button" data-val="${esc(n)}" aria-pressed="${!other && f.who === n}">${esc(n)}</button>`).join('')}
+      <button type="button" data-val="" aria-pressed="${!!other}">Someone else</button></div>
+      ${other ? h`<input class="text" id="whoOther" data-q="who" autocomplete="off" autocapitalize="words" placeholder="Their name" value="${esc(f.who)}" style="margin-top:8px">` : ''}`;
+  }
+
   function renderQuestion(q, f) {
+    if (q.id === 'who' && S.tenant) return nobodyAnswered(f) ? '' : renderWho(q, f);
     const id = 'f_' + q.id.replace(/[^a-z0-9]/gi, '_');
     const lbl = (tag) => h`<${tag} class="${tag === 'label' ? '' : 'lbl'}" ${tag === 'label' ? `for="${id}"` : ''}>${esc(q.label)}${q.hint ? h` <span class="hint">${esc(q.hint)}</span>` : ''}</${tag}>`;
     const v = f[q.id];
@@ -437,8 +453,19 @@
       group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
         S.form[group.dataset.choice] = b.dataset.val;
         group.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+        if (group.dataset.choice === 'response' && S.tenant) { // "who" appears or disappears with the answer
+          const was = nobodyAnswered({ response: S.form._lastResponse }); S.form._lastResponse = b.dataset.val;
+          if (was !== nobodyAnswered(S.form)) { const y = window.scrollY; render(); window.scrollTo(0, y); }
+        }
       }));
     });
+    const who = $app.querySelector('[data-who]');
+    if (who) who.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      S.form.whoOther = b.dataset.val === '';
+      S.form.who = b.dataset.val;
+      const y = window.scrollY; render(); window.scrollTo(0, y);
+      if (S.form.whoOther) { const el = $app.querySelector('#whoOther'); if (el) el.focus(); }
+    }));
     $app.querySelectorAll('[data-echoice]').forEach((group) => {
       group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
         S.edit[group.dataset.echoice] = b.dataset.val;
@@ -570,7 +597,7 @@
     S.saving = true; render(); busy(true); wait('Saving…');
     try {
       const chosen = f.primary >= 0 && f.people[f.primary] && f.people[f.primary].name.trim() ? f.people[f.primary].name.trim() : '';
-      const r = await api('/api/interaction', { ...f, people: f.people.filter((p) => p.name.trim()), makePrimary: chosen });
+      const r = await api('/api/interaction', { ...f, who: nobodyAnswered(f) ? '' : f.who, people: f.people.filter((p) => p.name.trim()), makePrimary: chosen });
       sticky.set({ building: f.building, values: stickyValues(f) });
       S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');
