@@ -143,6 +143,8 @@ a { color: inherit; }
 }
 .choices button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .choices.tags button { min-height: 40px; border-radius: 20px; font-weight: 400; font-size: 15px; padding: 0 12px; }
+.tag-group + .tag-group { margin-top: 12px; }
+.tag-group-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
 .text, .textarea {
   width: 100%; border: 2px solid var(--line); border-radius: var(--radius);
   padding: 10px 12px; font-size: 17px; background: var(--paper);

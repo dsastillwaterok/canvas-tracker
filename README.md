@@ -118,6 +118,7 @@ The key that links a conversation to a tenant is `building-unit` (`8659-4`) or j
 - `linkMessage`: the text sent with a personal link; placeholders `{name}`, `{appName}`, `{link}`, `{until}`
 - `newUnitStatus`: status given to a tenant row created from a conversation, by response
 - `contactStatus`: stale window, dead-end statuses, and label text used by the built formula
+- `tagGroups`: `[{ "label": "Inside the unit", "tags": [...] }]`, how grievance tags are grouped on the phone; tags not in any group appear under "Other"
 - `defaultLists`: dropdown choices the build wizard starts from
 
 To change settings for a sheet that's already configured, re-run the mapping wizard; it starts from the saved settings.

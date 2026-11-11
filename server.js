@@ -216,6 +216,7 @@ app.get('/api/bootstrap', requireCanvasser, async (req, res, next) => {
       interactionFields: Object.fromEntries(Object.keys(ctx.config.columns.interactions).map((f) => [f, icols[f] !== -1])),
       formFields: ctx.config.formFields || ['who', 'discussed', 'followUp', 'followUpDate', 'phone', 'email'],
       extraFields: ctx.config.extraFields || [],
+      tagGroups: ctx.config.tagGroups || [],
       editable: ctx.config.editableFields || [],
       lists,
       tenants: tenants.map((t) => ({

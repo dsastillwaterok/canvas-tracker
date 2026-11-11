@@ -57,6 +57,20 @@
   const show = (f) => S.formFields.includes(f) && (['phone', 'email', 'okPhone', 'okEmail', 'grievanceTypes'].includes(f) ? S.features[f] : S.interactionFields[f]);
   const hasB = () => S.features.building;
 
+  // Tags grouped by theme (config.tagGroups), in the group's order; anything ungrouped goes last.
+  function tagGroups() {
+    const all = S.lists.grievanceTypes || [];
+    const groups = (S.tagGroups || []).map((g) => ({ label: g.label, tags: (g.tags || []).filter((t) => all.includes(t)) })).filter((g) => g.tags.length);
+    const placed = new Set(groups.flatMap((g) => g.tags));
+    const rest = all.filter((t) => !placed.has(t));
+    if (rest.length) groups.push({ label: groups.length ? 'Other' : '', tags: rest });
+    return groups;
+  }
+  function tagPicker(attr, selected) {
+    return tagGroups().map((g) => h`<div class="tag-group">${g.label ? h`<span class="tag-group-label">${esc(g.label)}</span>` : ''}
+      <div class="choices tags" ${attr}>${g.tags.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${selected.includes(v)}">${esc(v)}</button>`).join('')}</div></div>`).join('');
+  }
+
   // A text box that suggests previous entries as you type but accepts anything new.
   function combo(id, field, value, placeholder, attrs = '') {
     return h`<div class="combo"><input class="text" id="${id}" data-combo="${field}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${esc(placeholder)}" value="${esc(value)}" ${attrs}><ul class="suggest" hidden></ul></div>`;
@@ -227,7 +241,7 @@
       ${show('discussed') ? h`<div class="field"><label for="discussed">What was discussed</label>
         <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>` : ''}
       ${show('grievanceTypes') ? h`<div class="field"><span class="lbl">Grievances they raised <span class="hint">${(S.tenant && (S.tenant.grievanceTypes || []).length) ? 'already on file are filled in; tap to add or clear' : 'tap all that apply'}</span></span>
-        <div class="choices tags" data-ftags="grievanceTypes">${(S.lists.grievanceTypes || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${f.grievanceTypes.includes(v)}">${esc(v)}</button>`).join('')}</div></div>` : ''}
+        ${tagPicker('data-ftags="grievanceTypes"', f.grievanceTypes)}</div>` : ''}
       ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
         ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
       ${show('phone') || show('email') || show('okPhone') || show('okEmail') ? h`<div class="field"><span class="lbl">Contact info <span class="hint">if they gave it. Tick the box only if they said we may use it.</span></span>
@@ -272,8 +286,7 @@
         ${(S.lists.statuses || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.status === v}">${esc(v)}</button>`).join('')}</div></div>` : ''}
       ${can('housing') ? h`<div class="field"><span class="lbl">Housing assistance</span><div class="choices" data-echoice="housing">
         ${(S.lists.stay || ['Yes', 'No', 'Unsure']).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.housing === v}">${esc(v)}</button>`).join('')}</div></div>` : ''}
-      ${can('grievanceTypes') ? h`<div class="field"><span class="lbl">Grievance types</span><div class="choices tags" data-etags="grievanceTypes">
-        ${(S.lists.grievanceTypes || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.grievanceTypes.includes(v)}">${esc(v)}</button>`).join('')}</div></div>` : ''}
+      ${can('grievanceTypes') ? h`<div class="field"><span class="lbl">Grievance types</span>${tagPicker('data-etags="grievanceTypes"', e.grievanceTypes)}</div>` : ''}
       ${can('grievances') ? h`<div class="field"><label for="e_griev">Grievances</label><textarea class="textarea" id="e_griev">${esc(e.grievances)}</textarea></div>` : ''}
       ${can('groupChat') || can('socialLead') ? h`<div class="field">
         ${can('groupChat') ? h`<label class="toggle"><input type="checkbox" id="e_groupChat" ${e.groupChat ? 'checked' : ''}> In the group chat</label>` : ''}
@@ -418,7 +431,7 @@
     const b = await api('/api/bootstrap');
     S.me = b.me; S.appName = b.appName; S.lists = b.lists; S.tenants = b.tenants;
     S.features = b.features || {}; S.interactionFields = b.interactionFields || {};
-    S.formFields = b.formFields || []; S.extraFields = b.extraFields || []; S.editable = b.editable || [];
+    S.formFields = b.formFields || []; S.extraFields = b.extraFields || []; S.tagGroups = b.tagGroups || []; S.editable = b.editable || [];
     document.title = `${S.appName} canvass`;
   }
 

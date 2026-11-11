@@ -142,6 +142,50 @@
       "recent": "Contacted {days} days ago"
     }
   },
+  "tagGroups": [
+    {
+      "label": "Inside the unit",
+      "tags": [
+        "Heating",
+        "Air conditioning",
+        "Hot water",
+        "Plumbing",
+        "Appliances",
+        "Unit repairs",
+        "Mold",
+        "Air quality",
+        "Pests"
+      ]
+    },
+    {
+      "label": "Building and grounds",
+      "tags": [
+        "Trash",
+        "Grounds",
+        "Exterior lighting",
+        "Locks / security",
+        "Safety hazards",
+        "Accessibility"
+      ]
+    },
+    {
+      "label": "Rent and lease",
+      "tags": [
+        "Rent",
+        "Fees",
+        "Eviction notices"
+      ]
+    },
+    {
+      "label": "Management",
+      "tags": [
+        "Maintenance responsiveness",
+        "Communication",
+        "Retaliation",
+        "Abatement / inspections"
+      ]
+    }
+  ],
   "defaultLists": {
     "statuses": [
       "Not contacted",
@@ -178,28 +222,28 @@
       "Unsure"
     ],
     "grievanceTypes": [
-      "Trash",
-      "Pests",
-      "Mold",
-      "Air quality",
-      "Air conditioning",
       "Heating",
+      "Air conditioning",
       "Hot water",
       "Plumbing",
       "Appliances",
       "Unit repairs",
+      "Mold",
+      "Air quality",
+      "Pests",
+      "Trash",
       "Grounds",
       "Exterior lighting",
-      "Safety hazards",
       "Locks / security",
+      "Safety hazards",
       "Accessibility",
-      "Fees",
       "Rent",
+      "Fees",
       "Eviction notices",
-      "Abatement / inspections",
       "Maintenance responsiveness",
       "Communication",
-      "Retaliation"
+      "Retaliation",
+      "Abatement / inspections"
     ],
     "buildings": []
   },
