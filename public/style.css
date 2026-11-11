@@ -198,3 +198,8 @@ body.gate { background: var(--surface); }
 }
 .suggest li { padding: 10px 14px; font-size: 17px; font-variant-numeric: tabular-nums; }
 .suggest li:active { background: var(--surface); }
+
+/* Other people in the unit */
+.people .person { padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 10px; }
+.people .person > label { display: block; font-weight: 600; margin-bottom: 6px; }
+.people .person .contact-pair { margin-top: 10px; }

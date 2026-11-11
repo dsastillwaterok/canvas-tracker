@@ -43,6 +43,13 @@ async function boot() {
   const config = fromSheet || loadConfig();
   // Until an organizer picks the door-form questions in the wizard, follow the defaults as they grow.
   if (!config.form && !config.formFieldsChosen) config.formFields = [...new Set([...(config.formFields || []), ...form.DEFAULT_FIELDS.map((f) => f.id)])];
+  // Likewise the optional Residents tab: known by its default name and headers until the wizard says otherwise.
+  if (!config.peopleChosen && !config.columns.people) {
+    const d = loadConfig();
+    config.tabs.people = config.tabs.people || d.tabs.people;
+    config.columns.people = d.columns.people;
+    config.checkboxFields.people = d.checkboxFields.people;
+  }
   try {
     await ctx.applyConfig(config);
     const f = await ctx.schema.features();
@@ -240,6 +247,10 @@ app.post('/api/interaction', requireCanvasser, async (req, res, next) => {
     const spec = form.availableFields(form.formSpec(ctx.config), { interactions: await ctx.schema.tab('interactions'), tenants: await ctx.schema.tab('tenants') });
     const problem = form.validate(spec, req.body || {}, await ctx.tracker.lists());
     if (problem) return res.status(400).json({ error: problem });
+    for (const p of (Array.isArray(req.body.people) ? req.body.people : [])) {
+      if (!String(p.name || '').trim()) return res.status(400).json({ error: 'Each other person needs a name.' });
+      if (String(p.email || '').trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(p.email).trim())) return res.status(400).json({ error: `${p.name}'s email doesn't look like an email address.` });
+    }
     const result = await ctx.tracker.logInteraction({ ...req.body, canvasser: req.canvasser });
     res.json({ ...result, tenant: await ctx.tracker.tenant(result.key) });
   } catch (e) {

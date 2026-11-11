@@ -50,7 +50,8 @@
   // A fresh form: sticky answers carried over, tenant-row answers pre-filled from the tenant.
   function blankForm(t) {
     const st = sticky.get();
-    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '' };
+    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '', peopleOpen: false,
+      people: t && t.people ? t.people.map((p) => ({ name: p.name || '', phone: p.phone || '', email: p.email || '', okPhone: !!p.okPhone, okEmail: !!p.okEmail })) : [] };
     for (const q of S.formSpec) {
       let v = q.kind === 'tags' ? [] : q.kind === 'checkbox' ? false : '';
       if (q.sticky && st.values && q.id in st.values) v = st.values[q.id];
@@ -200,6 +201,11 @@
         ${due ? h`<div class="section"><div class="notice go">Follow-up due ${esc(due.followUpDate)}: ${esc(due.followUp || 'see last conversation')}
           <div style="margin-top:8px"><button class="btn quiet" data-done="${due.row}">Mark done</button></div></div></div>` : ''}
 
+        ${(t.people || []).length ? h`<div class="section"><h2>Also in this unit</h2>
+          ${t.people.map((p) => h`<div class="line"><span><strong>${esc(p.name)}</strong></span>
+            ${p.phone ? (S.features.okPhone && !p.okPhone ? h`<span class="hint">${esc(p.phone)} (not OK'd for calls)</span>` : h`<a class="tel" href="tel:${esc(p.phone.replace(/[^\d+]/g, ''))}">${esc(p.phone)}</a>`) : ''}
+            ${p.email ? (S.features.okEmail && !p.okEmail ? h`<span class="hint">${esc(p.email)} (not OK'd for email)</span>` : h`<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`) : ''}
+            ${p.notes ? h`<span class="hint">${esc(p.notes)}</span>` : ''}</div>`).join('')}</div>` : ''}
         ${(t.grievanceTypes || []).length || t.grievances ? h`<div class="section"><h2>Grievances</h2>
           ${(t.grievanceTypes || []).length ? h`<div class="chips">${t.grievanceTypes.map((g) => h`<span class="tag">${esc(g)}</span>`).join('')}</div>` : ''}
           ${t.grievances ? h`<p class="detail">${esc(t.grievances)}</p>` : ''}</div>` : ''}
@@ -269,6 +275,27 @@
     }
   }
 
+  // Other people in the unit: hidden behind a button until the canvasser needs it.
+  const blankPerson = () => ({ name: '', phone: '', email: '', okPhone: false, okEmail: false });
+  function renderPeople(f) {
+    if (!S.features.people) return '';
+    const n = f.people.filter((p) => p.name.trim()).length;
+    if (!f.peopleOpen) return h`<div class="field"><button type="button" class="btn quiet" id="peopleOpen">${n ? `Other people in this unit (${n})` : 'Add another person in this unit'}</button></div>`;
+    const list = f.people.length ? f.people : [blankPerson()];
+    if (!f.people.length) f.people = list;
+    return h`<div class="field people"><span class="lbl">Other people in this unit <span class="hint">roommates, family, anyone else who answers the door</span></span>
+      ${list.map((p, i) => h`<div class="person">
+        <label for="p_name_${i}">Name</label><input class="text" id="p_name_${i}" data-p="${i}" data-pf="name" autocapitalize="words" value="${esc(p.name)}">
+        <div class="contact-pair">
+          <div class="contact"><label for="p_phone_${i}">Phone</label><input class="text" id="p_phone_${i}" type="tel" data-p="${i}" data-pf="phone" value="${esc(p.phone)}">
+            <label class="toggle"><input type="checkbox" data-p="${i}" data-pf="okPhone" ${p.okPhone ? 'checked' : ''}> OK to call or text</label></div>
+          <div class="contact"><label for="p_email_${i}">Email</label><input class="text" id="p_email_${i}" type="email" autocapitalize="off" data-p="${i}" data-pf="email" value="${esc(p.email)}">
+            <label class="toggle"><input type="checkbox" data-p="${i}" data-pf="okEmail" ${p.okEmail ? 'checked' : ''}> OK to email</label></div>
+        </div></div>`).join('')}
+      <button type="button" class="btn quiet" id="personAdd">Add another person</button>
+    </div>`;
+  }
+
   // Lay the questions out: section headings, side-by-side rows, and boxes with a checkbox tucked under a field.
   function renderLogForm(opts = {}) {
     const f = S.form;
@@ -292,12 +319,16 @@
       return boxed ? h`<div class="contact">${inner}</div>` : h`<div>${inner}</div>`;
     };
     let out = '';
-    for (const b of blocks) {
+    // The "other people" section follows the block that holds the tenant's own phone/email, or goes last.
+    const contactBlock = blocks.findIndex((b) => b.units.some((u) => ['phone', 'email'].includes(u.q.id)));
+    blocks.forEach((b, i) => {
       const lead = b.units[0].q;
       const section = lead.section ? h`<span class="lbl">${esc(lead.section)}${lead.sectionHint ? h` <span class="hint">${esc(lead.sectionHint)}</span>` : ''}</span>` : '';
       if (b.units.length > 1) out += h`<div class="field">${section}<div class="${b.units.some((u) => u.under.length) ? 'contact-pair' : 'two'}">${b.units.map(unitHtml).join('')}</div></div>`;
       else out += h`<div class="field">${section}${b.units[0].under.length ? h`<div class="contact-pair">${unitHtml(b.units[0])}</div>` : unitHtml(b.units[0]).replace(/^<div>|<\/div>$/g, '')}</div>`;
-    }
+      if (i === contactBlock) out += renderPeople(f);
+    });
+    if (contactBlock === -1) out += renderPeople(f);
     return out + (S.error ? h`<p class="err">${esc(S.error)}</p>` : '');
   }
 
@@ -421,6 +452,13 @@
     on('#e_groupChat', 'change', (e) => { S.edit.groupChat = e.target.checked; });
     on('#e_socialLead', 'change', (e) => { S.edit.socialLead = e.target.checked; });
 
+    on('#peopleOpen', 'click', () => { S.form.peopleOpen = true; render(); const el = $app.querySelector('#p_name_0'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } });
+    on('#personAdd', 'click', () => { S.form.people.push(blankPerson()); render(); const i = S.form.people.length - 1; const el = $app.querySelector('#p_name_' + i); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } });
+    $app.querySelectorAll('[data-p]').forEach((el) => {
+      const p = () => S.form.people[parseInt(el.dataset.p, 10)];
+      if (el.type === 'checkbox') el.addEventListener('change', () => { p()[el.dataset.pf] = el.checked; });
+      else el.addEventListener('input', () => { p()[el.dataset.pf] = el.value; });
+    });
     on('#save', 'click', save);
     on('#saveEdit', 'click', saveEdit);
     $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', async () => {
@@ -443,10 +481,14 @@
     S.error = '';
     if (S.view === 'new' && !f.unit.trim()) S.error = 'Enter the apartment number.';
     else S.error = validateForm(f) || '';
+    if (!S.error) for (const p of f.people) {
+      if (!p.name.trim() && (p.phone.trim() || p.email.trim() || p.okPhone || p.okEmail)) { S.error = 'Give the other person a name, or clear their details.'; break; }
+      if (p.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) { S.error = `${p.name.trim() || 'The other person'}'s email doesn't look right.`; break; }
+    }
     if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
     S.saving = true; render();
     try {
-      const r = await api('/api/interaction', f);
+      const r = await api('/api/interaction', { ...f, people: f.people.filter((p) => p.name.trim()) });
       sticky.set({ building: f.building, values: stickyValues(f) });
       S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');

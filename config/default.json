@@ -4,6 +4,7 @@
   "tabs": {
     "tenants": "Tenants",
     "interactions": "Interactions",
+    "people": "Residents",
     "lists": "Lists",
     "dashboard": "Dashboard"
   },
@@ -53,6 +54,17 @@
       "done": "Follow-up done?",
       "key": "Unit key"
     },
+    "people": {
+      "building": "Building",
+      "unit": "Unit",
+      "name": "Name",
+      "phone": "Phone",
+      "email": "Email",
+      "okPhone": "OK to call/text?",
+      "okEmail": "OK to email?",
+      "notes": "Notes",
+      "added": "Added"
+    },
     "lists": {
       "statuses": "Status",
       "languages": "Language",
@@ -80,6 +92,10 @@
     ],
     "interactions": [
       "done"
+    ],
+    "people": [
+      "okPhone",
+      "okEmail"
     ]
   },
   "formulaFields": {

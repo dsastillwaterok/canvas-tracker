@@ -9,6 +9,7 @@ Built for the Woodland Manor campaign of the Oklahoma Tenants Union. Made to be 
 - **Search** by unit, building, or name. A "Needs a knock" filter shows units never contacted or overdue.
 - **A tenant screen**: status, phone (tap to call), a "before you knock" note, grievance tags, the last conversation, and any follow-up due with a "Mark done" button.
 - **A log form** with big tappable buttons for how and what happened, free text for the rest. Saving writes the conversation to the sheet and creates the tenant's row if the unit is new.
+- **Other people in the unit**: a button on the form (closed by default) opens name, phone, email and consent boxes for a roommate or family member. They're kept on an optional `Residents` tab, one row per person, and listed on the tenant screen.
 - **Edit details** from the phone: status, tags, contact info, notes.
 
 No Google sign-in and no passwords. Before each canvass an organizer shows a QR code; scanning it signs a canvasser in until the canvass ends (a few days), then everyone's access lapses on its own. Removing a name from the sheet revokes it at once.
@@ -99,6 +100,7 @@ For local development, `MAIL_LOG=1` prints emails to the console instead of send
 | Tenants | reads every row with a unit; writes a new row when a new unit is logged; edits the fields listed in `editableFields` |
 | Interactions | writes one row per saved conversation, after the last row that has a date |
 | Lists | reads dropdown choices, canvasser names and emails; writes personal links if a links column exists |
+| Residents (optional) | one row per extra person in a unit: building, unit, name, phone, email, consent boxes, notes, added. Matched by unit and name; the form adds or updates. Without this tab the "other people" button doesn't appear |
 | Formula columns | never written. The app writes `null` for those cells, which the Sheets API treats as "leave alone" |
 
 Columns are found by header text, never by position, so you can reorder or insert columns freely. The "last filled row" is found from the unit / date column, because checkbox columns put a value on every row down to 1000 and would otherwise fool an append.

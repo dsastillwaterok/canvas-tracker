@@ -47,6 +47,19 @@ const seed = require('./seed');
   await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', okPhone: false });
   assert.strictEqual((await tr.tenant('8663-13')).okPhone, true, 'an unchecked box on a later visit never revokes consent');
 
+  // Other people in the unit live on the optional Residents tab: upsert by name, consent only turns on.
+  assert.strictEqual(feats.people, true);
+  assert.strictEqual(detail.people.length, 1);
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', people: [{ name: 'theo brandt', email: 'theo@example.org', okPhone: false }, { name: 'Lena Brandt', phone: '555-0101', okEmail: true }, { name: '' }] });
+  const ppl = (await tr.tenant('8663-13')).people;
+  assert.strictEqual(ppl.length, 2, 'matched by name, blank skipped');
+  assert.strictEqual(ppl[0].email, 'theo@example.org'); assert.strictEqual(ppl[0].okPhone, true, 'an unchecked box never revokes'); assert.strictEqual(ppl[0].phone, '(918) 555-0142');
+  assert.strictEqual(ppl[1].name, 'Lena Brandt'); assert.strictEqual(ppl[1].okEmail, true);
+  // A sheet without the tab: the feature is off and people are ignored.
+  const noTab = new MockStore((() => { const d = seed(config); delete d[config.tabs.people]; return d; })());
+  const s0 = new Schema(noTab, config); assert.strictEqual((await s0.features()).people, false);
+  assert.strictEqual((await new Tracker(noTab, s0).tenant('8663-13')).people.length, 0);
+
   // Tags picked on the door form replace the tenant's set; omitting them leaves it alone.
   await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', grievanceTypes: ['Pests', 'Heating'] });
   assert.deepStrictEqual((await tr.tenant('8663-13')).grievanceTypes, ['Pests', 'Heating']);

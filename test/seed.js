@@ -62,5 +62,8 @@ module.exports = function seed(config) {
   for (let r = Tenants.length; r < 1000; r++) Tenants.push(tenantRow({ unit: '' }).map((v, i) => (i === TI.key ? '' : v)));
   for (let r = Interactions.length; r < 1000; r++) Interactions.push(interRow({ unit: '' }).map((v, i) => (i === II.key ? '' : v)));
 
-  return { [cfg.tabs.lists]: Lists, [cfg.tabs.tenants]: Tenants, [cfg.tabs.interactions]: Interactions };
+  const PI = Object.fromEntries(Object.keys(cfg.columns.people).map((k, i) => [k, i]));
+  const personRow = (o) => { const r = new Array(Object.keys(PI).length).fill(''); for (const [k, i] of Object.entries(PI)) r[i] = o[k] !== undefined ? o[k] : (cfg.checkboxFields.people.includes(k) ? 'FALSE' : ''); return r; };
+  const Residents = [Object.keys(PI).map((k) => cfg.columns.people[k]), personRow({ building: '8663', unit: '13', name: 'Theo Brandt', phone: '(918) 555-0142', okPhone: 'TRUE', added: '2026-11-07 18:02:00' })];
+  return { [cfg.tabs.lists]: Lists, [cfg.tabs.tenants]: Tenants, [cfg.tabs.interactions]: Interactions, [cfg.tabs.people]: Residents };
 };
