@@ -19,7 +19,7 @@ const seed = require('./seed');
   const lists = await tr.lists();
   assert.strictEqual(lists.canvassers.length, 4);
   assert.strictEqual(lists.buildings.length, 10);
-  assert.strictEqual(lists.grievanceTypes.length, 22);
+  assert.strictEqual(lists.grievanceTypes.length, 30);
   const feats = await schema.features();
   assert.strictEqual(feats.housing, true);
 

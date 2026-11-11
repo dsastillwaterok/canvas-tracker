@@ -150,7 +150,10 @@
         "Air conditioning",
         "Hot water",
         "Plumbing",
+        "Leaks / water damage",
+        "Electrical",
         "Appliances",
+        "Windows / doors / insulation",
         "Unit repairs",
         "Mold",
         "Air quality",
@@ -173,6 +176,9 @@
       "tags": [
         "Rent",
         "Fees",
+        "Utilities / billing",
+        "Deposit / move-out charges",
+        "Lease / renewal",
         "Eviction notices"
       ]
     },
@@ -181,6 +187,8 @@
       "tags": [
         "Maintenance responsiveness",
         "Communication",
+        "Entry without notice",
+        "Harassment / discrimination",
         "Retaliation",
         "Abatement / inspections"
       ]
@@ -226,7 +234,10 @@
       "Air conditioning",
       "Hot water",
       "Plumbing",
+      "Leaks / water damage",
+      "Electrical",
       "Appliances",
+      "Windows / doors / insulation",
       "Unit repairs",
       "Mold",
       "Air quality",
@@ -239,9 +250,14 @@
       "Accessibility",
       "Rent",
       "Fees",
+      "Utilities / billing",
+      "Deposit / move-out charges",
+      "Lease / renewal",
       "Eviction notices",
       "Maintenance responsiveness",
       "Communication",
+      "Entry without notice",
+      "Harassment / discrimination",
       "Retaliation",
       "Abatement / inspections"
     ],
