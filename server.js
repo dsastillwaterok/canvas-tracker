@@ -14,9 +14,12 @@ const ADMIN_KEY = process.env.ADMIN_KEY;
 if (!APP_SECRET) { console.error('APP_SECRET is not set'); process.exit(1); }
 if (!ADMIN_KEY) { console.error('ADMIN_KEY is not set'); process.exit(1); }
 
-const store = process.env.MOCK_SHEET
-  ? new MockStore(process.env.MOCK_SHEET === 'blank' ? { Sheet1: [] } : require('./test/seed')())
-  : new SheetStore({ sheetId: process.env.SHEET_ID, credentialsJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON });
+let store;
+try {
+  store = process.env.MOCK_SHEET
+    ? new MockStore(process.env.MOCK_SHEET === 'blank' ? { Sheet1: [] } : require('./test/seed')())
+    : new SheetStore({ sheetId: process.env.SHEET_ID, credentialsJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON });
+} catch (e) { console.error(e.message); process.exit(1); }
 
 // Everything that depends on the config lives in ctx so setup can swap it at runtime.
 const ctx = {
