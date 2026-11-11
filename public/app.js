@@ -62,14 +62,22 @@
     return h`<div class="combo"><input class="text" id="${id}" data-combo="${field}" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${esc(placeholder)}" value="${esc(value)}" ${attrs}><ul class="suggest" hidden></ul></div>`;
   }
   function comboOptions(field) {
-    if (field === 'building') return (S.lists.buildings || []).slice();
+    const b = (S.form.building || '').trim();
+    if (field === 'building') return (S.lists.buildings || []).map((v) => ({ value: v, label: v }));
     if (field === 'unit') {
-      const b = (S.form.building || '').trim();
-      const units = S.tenants.filter((t) => !b || t.building === b).map((t) => t.unit);
-      return [...new Set(units)].sort((a, c) => a.localeCompare(c, undefined, { numeric: true }));
+      const seen = new Set();
+      return S.tenants.filter((t) => !b || t.building === b).filter((t) => !seen.has(t.unit) && seen.add(t.unit))
+        .sort((x, y) => x.unit.localeCompare(y.unit, undefined, { numeric: true }))
+        .map((t) => ({ value: t.unit, label: t.unit, key: t.key }));
+    }
+    if (field === 'who') {
+      return S.tenants.filter((t) => t.name && (!b || t.building === b))
+        .sort((x, y) => x.name.localeCompare(y.name))
+        .map((t) => ({ value: t.name, label: `${t.name} · ${t.key}`, key: t.key }));
     }
     return [];
   }
+  const tenantFor = (building, unit) => S.tenants.find((t) => t.unit === (unit || '').trim() && (t.building || '') === (building || '').trim());
 
   // ---- rendering ---------------------------------------------------------------
   function render() {
@@ -176,8 +184,8 @@
           ${combo('building', 'building', f.building, 'e.g. 8659', 'inputmode="numeric"')}</div>` : ''}
         <div class="field"><label for="unit">Apartment number <span class="hint">pick an existing unit or type a new one</span></label>
           ${combo('unit', 'unit', f.unit, 'e.g. 4')}</div>
-        <div class="field"><label for="who">Name</label>
-          <input class="text" id="who" autocomplete="off" placeholder="Who you talked to, if anyone" value="${esc(f.who)}"></div>
+        <div class="field"><label for="who">Name <span class="hint">pick someone already on file to add to their page</span></label>
+          ${combo('who', 'who', f.who, 'Who you talked to, if anyone', 'autocapitalize="words"')}</div>
         <div class="section" id="logSection"><h2>The conversation</h2>${renderLogForm({ skipWho: true })}</div>
       </div>
       <div class="fab-wrap"><button class="btn primary block" id="save" ${S.saving ? 'disabled' : ''}>${S.saving ? 'Saving…' : 'Save new unit and conversation'}</button></div>`;
@@ -282,8 +290,8 @@
       const list = input.nextElementSibling;
       const showList = () => {
         const q = input.value.trim().toLowerCase();
-        const opts = comboOptions(field).filter((o) => !q || o.toLowerCase().includes(q)).slice(0, 8);
-        list.innerHTML = opts.map((o) => h`<li role="option" data-val="${esc(o)}">${esc(o)}</li>`).join('');
+        const opts = comboOptions(field).filter((o) => !q || o.label.toLowerCase().includes(q)).slice(0, 8);
+        list.innerHTML = opts.map((o) => h`<li role="option" data-val="${esc(o.value)}" data-key="${esc(o.key || '')}">${esc(o.label)}</li>`).join('');
         list.hidden = !opts.length;
       };
       input.addEventListener('focus', showList);
@@ -292,6 +300,9 @@
       list.addEventListener('mousedown', (e) => {
         const li = e.target.closest('li'); if (!li) return;
         e.preventDefault(); input.value = li.dataset.val; S.form[field] = li.dataset.val; list.hidden = true;
+        // Picking a person or a unit that already exists means "add a conversation there", not a new row.
+        const existing = li.dataset.key ? S.tenants.find((t) => t.key === li.dataset.key) : null;
+        if (existing && S.view === 'new') { const keep = { type: S.form.type }; openTenant(existing.key).then(() => { S.form.type = keep.type; render(); }); return; }
         if (field === 'building') { const u = $app.querySelector('[data-combo="unit"]'); if (u) u.focus(); }
       });
     });
