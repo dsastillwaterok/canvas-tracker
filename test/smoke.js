@@ -139,5 +139,22 @@ const seed = require('./seed');
   assert.strictEqual(auth.nameFromCookie('s3cret', ck), 'Ben K');
   assert.strictEqual(auth.nameFromCookie('s3cret', ck + 'x'), null);
 
+  // Sign-up links: valid, expired, cancelled, tampered.
+  const now = 1_700_000_000_000;
+  const jt = auth.joinToken('s3cret', now, now + 86400e3);
+  assert.strictEqual(auth.parseJoinToken('s3cret', jt, { now: now + 1000 }).ok, true);
+  assert.match(auth.parseJoinToken('s3cret', jt, { now: now + 2 * 86400e3 }).reason, /expired/);
+  assert.match(auth.parseJoinToken('s3cret', jt, { now: now + 1000, notBefore: now + 1 }).reason, /cancelled/);
+  assert.strictEqual(auth.parseJoinToken('s3cret', jt.slice(0, -1) + 'x', { now }).ok, false);
+  assert.strictEqual(auth.parseJoinToken('other', jt, { now }).ok, false);
+  // Self-registration adds to the Lists tab once, fills a blank email, never duplicates.
+  const added = await tr.addCanvasser('Zed Q', 'zed@example.org');
+  assert.strictEqual(added.created, true);
+  const again = await tr.addCanvasser('zed q', '');
+  assert.strictEqual(again.created, false);
+  assert.strictEqual((await tr.canvassers()).filter((c) => c.name === 'Zed Q').length, 1);
+  await tr.markLinkSent('Zed Q');
+  assert.ok((await tr.canvassers()).find((c) => c.name === 'Zed Q').linkSent);
+
   console.log('smoke test: all good');
 })().catch((e) => { console.error(e); process.exit(1); });

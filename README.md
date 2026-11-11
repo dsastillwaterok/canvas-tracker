@@ -74,6 +74,20 @@ After setup, a skippable **Canvassers** step lets you add names and optional ema
 
 Add or remove a canvasser on the Canvassers step (or by editing the sheet). A removed name's link stops working on the next request. The message template is editable on the same step.
 
+**Let people sign themselves up.** On the Canvassers step, create a sign-up link good for a day to a month and paste it into the volunteer group chat. Whoever opens it enters a name and optional email, is added to the lists tab, and lands in the app already signed in with their personal link and home-screen instructions. "Cancel all sign-up links" invalidates every outstanding one.
+
+**Send the links from the app (optional).** Set these variables and the Links page gains *Send email* per person and *Send to everyone not yet sent*; each send stamps the date in a "Link sent" column on the lists tab if one exists.
+
+| Name | What |
+|---|---|
+| `SMTP_HOST` | e.g. `smtp.gmail.com` |
+| `SMTP_PORT` | `465` (default) or `587` |
+| `SMTP_USER` | the sending address, e.g. your organization's Gmail |
+| `SMTP_PASS` | its password. For Gmail, an **app password** (Google Account > Security > 2-Step Verification > App passwords), not the account password |
+| `MAIL_FROM` | optional display form, e.g. `Riverside Tenants <riverside@gmail.com>` |
+
+Without them, the Email and Text buttons open your own mail or messages app, which is a fine way to run a small team.
+
 ## How the sheet is used
 
 | Tab | The app... |

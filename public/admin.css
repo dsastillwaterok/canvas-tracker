@@ -42,3 +42,9 @@ table.people th { text-align: left; font-size: 14px; color: var(--ink-2); paddin
 table.people td { padding: 4px 8px 4px 0; }
 table.people input { margin-top: 0; }
 pre.msg { white-space: pre-wrap; background: var(--paper); padding: 12px; border-radius: var(--radius); font: inherit; }
+
+form.inline { display: inline-block; margin: 0; }
+form.inline label { display: inline; margin: 0 8px 0 0; }
+form.inline select { display: inline-block; width: auto; margin: 0 6px; }
+.admin input.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; width: 100%; display: inline-block; }
+.btn.small.primary { background: var(--accent); border-color: var(--accent); color: #fff; }

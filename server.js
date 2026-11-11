@@ -7,6 +7,7 @@ const { Tracker } = require('./lib/tracker');
 const setup = require('./lib/setup');
 const admin = require('./lib/admin');
 const auth = require('./lib/auth');
+const { mailer } = require('./lib/mail');
 
 const PORT = process.env.PORT || 3000;
 const APP_SECRET = process.env.APP_SECRET;
@@ -23,7 +24,7 @@ try {
 
 // Everything that depends on the config lives in ctx so setup can swap it at runtime.
 const ctx = {
-  store, appSecret: APP_SECRET, adminKey: ADMIN_KEY,
+  store, appSecret: APP_SECRET, adminKey: ADMIN_KEY, mailer: mailer(),
   config: null, schema: null, tracker: null, configured: false, lastError: '',
   baseUrl: (req) => process.env.BASE_URL || `${req.protocol}://${req.get('host')}`,
   async applyConfig(config, { persist = false } = {}) {
@@ -87,6 +88,43 @@ app.get('/c/:token', async (req, res, next) => {
     if (!name) return res.status(404).sendFile(path.join(__dirname, 'public', 'gate.html'));
     res.cookie(auth.COOKIE, auth.cookieValue(APP_SECRET, name), { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 365 * 24 * 3600 * 1000, path: '/' });
     res.redirect('/');
+  } catch (e) { next(e); }
+});
+
+// ---- self-registration ----------------------------------------------------------
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function joinPage(body) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join the canvass</title><link rel="stylesheet" href="/static/style.css"></head><body class="gate"><main class="gate-box">${body}</main></body></html>`;
+}
+app.get('/join/:token', express.urlencoded({ extended: false }), (req, res) => {
+  if (!ctx.configured) return res.status(503).send(joinPage('<h1>Not ready yet</h1><p>An organizer still has to finish setting up the app.</p>'));
+  const t = auth.parseJoinToken(APP_SECRET, req.params.token, { notBefore: ctx.config.joinNotBefore || 0 });
+  if (!t.ok) return res.status(410).send(joinPage(`<p class="plate">${esc(ctx.config.appName)}</p><h1>${esc(t.reason)}</h1>`));
+  res.set('Cache-Control', 'no-store');
+  res.send(joinPage(`<p class="plate">${esc(ctx.config.appName)}</p><h1>Sign up to canvass</h1>
+<p>Your name is how conversations you log get credited. Email is optional; organizers use it to reach you.</p>
+<form method="post" action="/join/${esc(req.params.token)}">
+<div class="field"><label for="name">Your name</label><input class="text" id="name" name="name" required autocomplete="name" placeholder="First name and last initial is fine"></div>
+<div class="field"><label for="email">Email <span class="hint">optional</span></label><input class="text" id="email" name="email" type="email" autocomplete="email"></div>
+<div class="field"><button class="btn primary block">Sign me up</button></div>
+</form>`));
+});
+app.post('/join/:token', express.urlencoded({ extended: false }), async (req, res, next) => {
+  try {
+    if (!ctx.configured) return res.status(503).send(joinPage('<h1>Not ready yet</h1>'));
+    const t = auth.parseJoinToken(APP_SECRET, req.params.token, { notBefore: ctx.config.joinNotBefore || 0 });
+    if (!t.ok) return res.status(410).send(joinPage(`<h1>${esc(t.reason)}</h1>`));
+    const name = String(req.body.name || '').trim().slice(0, 80);
+    const email = String(req.body.email || '').trim().slice(0, 120);
+    if (!name) return res.status(400).send(joinPage('<h1>Name is required</h1><p><a href="">Try again</a></p>'));
+    const c = await ctx.tracker.addCanvasser(name, email);
+    res.cookie(auth.COOKIE, auth.cookieValue(APP_SECRET, c.name), { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 365 * 24 * 3600 * 1000, path: '/' });
+    const link = auth.personalLink(ctx.baseUrl(req), APP_SECRET, c.name);
+    res.send(joinPage(`<p class="plate">${esc(ctx.config.appName)}</p><h1>You're in, ${esc(c.name.split(' ')[0])}.</h1>
+<p>This is your personal link. It signs you in on any phone, so keep it to yourself:</p>
+<p><a class="tel" href="${esc(link)}">${esc(link)}</a></p>
+<p>On your phone: open it, then use Share > <strong>Add to Home Screen</strong>. After that the app is one tap away.</p>
+<p><a class="btn primary block" href="/">Open the app</a></p>`));
   } catch (e) { next(e); }
 });
 
