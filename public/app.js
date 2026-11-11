@@ -3,7 +3,7 @@
   const $toast = document.getElementById('toast');
 
   const S = {
-    me: '', lists: null, tenants: [],
+    me: '', appName: '', lists: null, tenants: [], features: {}, interactionFields: {}, formFields: [], extraFields: [], editable: [],
     view: 'list', q: '', onlyDue: false,
     tenant: null, showAll: false, editing: false,
     form: null, saving: false, error: '',
@@ -46,9 +46,11 @@
   function blankForm(t) {
     return {
       building: t ? t.building : '', unit: t ? t.unit : '', who: '',
-      type: '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '',
+      type: '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', extra: {},
     };
   }
+  const show = (f) => S.formFields.includes(f) && (f === 'phone' || f === 'email' ? S.features[f] : S.interactionFields[f]);
+  const hasB = () => S.features.building;
 
   // ---- rendering ---------------------------------------------------------------
   function render() {
@@ -78,7 +80,7 @@
 
     return h`
       <div class="topbar">
-        <div class="row"><span class="plate md">Woodland Manor</span><span class="who">${esc(S.me)}</span></div>
+        <div class="row"><span class="plate md">${esc(S.appName)}</span><span class="who">${esc(S.me)}</span></div>
         <input class="search" id="q" type="search" inputmode="search" autocomplete="off"
                placeholder="Unit, building, or name" value="${esc(S.q)}" aria-label="Search tenants">
         <div class="filters">
@@ -104,6 +106,7 @@
             ${statusChip(t.contactStatus)}
             ${t.phone ? h`<a class="tel" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : ''}
             ${t.housing ? h`<span>Housing assistance: ${esc(t.housing)}</span>` : ''}
+            ${t.language && t.language !== 'English' ? h`<span>${esc(t.language)}</span>` : ''}
           </div>
         </div>
 
@@ -111,8 +114,8 @@
         ${due ? h`<div class="section"><div class="notice go">Follow-up due ${esc(due.followUpDate)}: ${esc(due.followUp || 'see last conversation')}
           <div style="margin-top:8px"><button class="btn quiet" data-done="${due.row}">Mark done</button></div></div></div>` : ''}
 
-        ${t.grievanceTypes.length || t.grievances ? h`<div class="section"><h2>Grievances</h2>
-          <div class="chips">${t.grievanceTypes.map((g) => h`<span class="tag">${esc(g)}</span>`).join('')}</div>
+        ${(t.grievanceTypes || []).length || t.grievances ? h`<div class="section"><h2>Grievances</h2>
+          <div class="chips">${(t.grievanceTypes || []).map((g) => h`<span class="tag">${esc(g)}</span>`).join('')}</div>
           ${t.grievances ? h`<p style="margin-top:8px;white-space:pre-wrap">${esc(t.grievances)}</p>` : ''}</div>` : ''}
 
         <div class="section">
@@ -128,9 +131,9 @@
         ${t.notes ? h`<div class="section"><h2>Notes</h2><p style="white-space:pre-wrap">${esc(t.notes)}</p></div>` : ''}
 
         <div class="section">
-          <details class="more" ${S.editing ? 'open' : ''} id="editDetails"><summary>Edit tenant details</summary>
+          ${S.editable.length ? h`<details class="more" ${S.editing ? 'open' : ''} id="editDetails"><summary>Edit tenant details</summary>
             ${renderEdit(t)}
-          </details>
+          </details>` : ''}
         </div>
 
         <div class="section" id="logSection">
@@ -147,11 +150,11 @@
       <div class="screen">
         <button class="back" id="back">‹ All units</button>
         <div class="head"><span class="plate lg">New unit</span></div>
-        <div class="field"><span class="lbl">Building <span class="hint">the 4-digit number on the outside</span></span>
+        ${hasB() ? h`<div class="field"><span class="lbl">Building <span class="hint">the number on the outside</span></span>
           <div class="choices" data-choice="building">
-            ${S.lists.buildings.map((b) => h`<button type="button" data-val="${esc(b)}" aria-pressed="${f.building === b}">${esc(b)}</button>`).join('')}
+            ${(S.lists.buildings || []).map((b) => h`<button type="button" data-val="${esc(b)}" aria-pressed="${f.building === b}">${esc(b)}</button>`).join('')}
             <button type="button" data-val="" aria-pressed="${f.building === ''}">Don't know</button>
-          </div></div>
+          </div></div>` : ''}
         <div class="field"><label for="unit">Apartment number</label>
           <input class="text" id="unit" inputmode="text" autocomplete="off" placeholder="e.g. 4" value="${esc(f.unit)}"></div>
         <div class="field"><label for="who">Name</label>
@@ -168,42 +171,52 @@
     return h`
       <div class="field"><span class="lbl">How</span>${choice('type', S.lists.types)}</div>
       <div class="field"><span class="lbl">What happened</span>${choice('response', S.lists.responses)}</div>
-      ${opts.skipWho ? '' : h`<div class="field"><label for="who">Who you talked to <span class="hint">leave blank if it was ${esc(S.tenant && S.tenant.name ? S.tenant.name : 'the tenant')} or nobody answered</span></label>
+      ${opts.skipWho || !show('who') ? '' : h`<div class="field"><label for="who">Who you talked to <span class="hint">leave blank if it was ${esc(S.tenant && S.tenant.name ? S.tenant.name : 'the tenant')} or nobody answered</span></label>
         <input class="text" id="who" autocomplete="off" value="${esc(f.who)}"></div>`}
-      <div class="field"><label for="discussed">What was discussed</label>
-        <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>
-      <div class="field two">
-        <div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>
-        <div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>
-      </div>
-      <details class="more"><summary>They gave a phone or email</summary>
+      ${show('discussed') ? h`<div class="field"><label for="discussed">What was discussed</label>
+        <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>` : ''}
+      ${show('followUp') || show('followUpDate') ? h`<div class="field two">
+        ${show('followUp') ? h`<div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>` : ''}
+        ${show('followUpDate') ? h`<div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>` : ''}
+      </div>` : ''}
+      ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
+        ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
+      ${show('phone') || show('email') ? h`<details class="more"><summary>They gave a phone or email</summary>
         <div class="field two">
-          <div><label for="phone">Phone</label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>
-          <div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>
+          ${show('phone') ? h`<div><label for="phone">Phone</label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>` : ''}
+          ${show('email') ? h`<div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>` : ''}
         </div>
-      </details>
+      </details>` : ''}
       ${S.error ? h`<p class="err">${esc(S.error)}</p>` : ''}`;
   }
 
   function renderEdit(t) {
+    const can = (f) => S.editable.includes(f) && S.features[f];
     const e = S.edit || (S.edit = {
-      name: t.name, phone: t.phone, email: t.email, status: t.status, groupChat: t.groupChat,
-      socialLead: t.socialLead, grievanceTypes: t.grievanceTypes.slice(), accessibility: t.accessibility, notes: t.notes,
+      name: t.name || '', phone: t.phone || '', email: t.email || '', status: t.status || '', groupChat: !!t.groupChat,
+      socialLead: !!t.socialLead, grievanceTypes: (t.grievanceTypes || []).slice(), accessibility: t.accessibility || '',
+      notes: t.notes || '', connected: t.connected || '', housing: t.housing || '', residents: t.residents || '', grievances: t.grievances || '',
     });
     return h`
       <div class="field two">
-        <div><label for="e_name">Name</label><input class="text" id="e_name" value="${esc(e.name)}"></div>
-        <div><label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}"></div>
+        ${can('name') ? h`<div><label for="e_name">Name</label><input class="text" id="e_name" value="${esc(e.name)}"></div>` : ''}
+        ${can('phone') ? h`<div><label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}"></div>` : ''}
       </div>
-      <div class="field"><label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}"></div>
-      <div class="field"><span class="lbl">Status</span><div class="choices" data-echoice="status">
-        ${S.lists.statuses.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.status === v}">${esc(v)}</button>`).join('')}</div></div>
-      <div class="field"><span class="lbl">Grievance types</span><div class="choices tags" data-etags="grievanceTypes">
-        ${S.lists.grievanceTypes.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.grievanceTypes.includes(v)}">${esc(v)}</button>`).join('')}</div></div>
-      <div class="field"><label class="toggle"><input type="checkbox" id="e_groupChat" ${e.groupChat ? 'checked' : ''}> In the group chat</label>
-        <label class="toggle"><input type="checkbox" id="e_socialLead" ${e.socialLead ? 'checked' : ''}> Social lead</label></div>
-      <div class="field"><label for="e_acc">Accessibility / visit notes</label><input class="text" id="e_acc" value="${esc(e.accessibility)}" placeholder="e.g. hard of hearing, knock loud"></div>
-      <div class="field"><label for="e_notes">Notes</label><textarea class="textarea" id="e_notes">${esc(e.notes)}</textarea></div>
+      ${can('email') ? h`<div class="field"><label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}"></div>` : ''}
+      ${can('status') ? h`<div class="field"><span class="lbl">Status</span><div class="choices" data-echoice="status">
+        ${(S.lists.statuses || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.status === v}">${esc(v)}</button>`).join('')}</div></div>` : ''}
+      ${can('housing') ? h`<div class="field"><span class="lbl">Housing assistance</span><div class="choices" data-echoice="housing">
+        ${(S.lists.stay || ['Yes', 'No', 'Unsure']).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.housing === v}">${esc(v)}</button>`).join('')}</div></div>` : ''}
+      ${can('grievanceTypes') ? h`<div class="field"><span class="lbl">Grievance types</span><div class="choices tags" data-etags="grievanceTypes">
+        ${(S.lists.grievanceTypes || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.grievanceTypes.includes(v)}">${esc(v)}</button>`).join('')}</div></div>` : ''}
+      ${can('grievances') ? h`<div class="field"><label for="e_griev">Grievances</label><textarea class="textarea" id="e_griev">${esc(e.grievances)}</textarea></div>` : ''}
+      ${can('groupChat') || can('socialLead') ? h`<div class="field">
+        ${can('groupChat') ? h`<label class="toggle"><input type="checkbox" id="e_groupChat" ${e.groupChat ? 'checked' : ''}> In the group chat</label>` : ''}
+        ${can('socialLead') ? h`<label class="toggle"><input type="checkbox" id="e_socialLead" ${e.socialLead ? 'checked' : ''}> Social lead</label>` : ''}</div>` : ''}
+      ${can('connected') ? h`<div class="field"><label for="e_conn">Connected to (units or names)</label><input class="text" id="e_conn" value="${esc(e.connected)}"></div>` : ''}
+      ${can('residents') ? h`<div class="field"><label for="e_res">Residents in unit</label><input class="text" id="e_res" inputmode="numeric" value="${esc(e.residents)}"></div>` : ''}
+      ${can('accessibility') ? h`<div class="field"><label for="e_acc">Accessibility / visit notes</label><input class="text" id="e_acc" value="${esc(e.accessibility)}" placeholder="e.g. hard of hearing, knock loud"></div>` : ''}
+      ${can('notes') ? h`<div class="field"><label for="e_notes">Notes</label><textarea class="textarea" id="e_notes">${esc(e.notes)}</textarea></div>` : ''}
       <div class="field"><button class="btn" id="saveEdit">Save details</button></div>`;
   }
 
@@ -246,6 +259,10 @@
     on('#e_email', 'input', (e) => { S.edit.email = e.target.value; });
     on('#e_acc', 'input', (e) => { S.edit.accessibility = e.target.value; });
     on('#e_notes', 'input', (e) => { S.edit.notes = e.target.value; });
+    on('#e_griev', 'input', (e) => { S.edit.grievances = e.target.value; });
+    on('#e_conn', 'input', (e) => { S.edit.connected = e.target.value; });
+    on('#e_res', 'input', (e) => { S.edit.residents = e.target.value; });
+    $app.querySelectorAll('[data-extra]').forEach((el) => el.addEventListener('input', (e) => { S.form.extra[el.dataset.extra] = e.target.value; }));
     on('#e_groupChat', 'change', (e) => { S.edit.groupChat = e.target.checked; });
     on('#e_socialLead', 'change', (e) => { S.edit.socialLead = e.target.checked; });
 
@@ -276,7 +293,7 @@
     S.saving = true; render();
     try {
       const r = await api('/api/interaction', f);
-      S.saving = false;
+      S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');
       await refreshList();
       await openTenant(r.key);
@@ -285,7 +302,9 @@
 
   async function saveEdit() {
     try {
-      const t = await api('/api/tenant/' + encodeURIComponent(S.tenant.key), S.edit);
+      const payload = {};
+      for (const [k, v] of Object.entries(S.edit)) if (S.editable.includes(k) && S.features[k]) payload[k] = v;
+      const t = await api('/api/tenant/' + encodeURIComponent(S.tenant.key), payload);
       S.tenant = t; S.edit = null; S.editing = false; toast('Details saved');
       await refreshList(); render();
     } catch (e) { toast(e.message); }
@@ -293,7 +312,10 @@
 
   async function refreshList() {
     const b = await api('/api/bootstrap');
-    S.me = b.me; S.lists = b.lists; S.tenants = b.tenants;
+    S.me = b.me; S.appName = b.appName; S.lists = b.lists; S.tenants = b.tenants;
+    S.features = b.features || {}; S.interactionFields = b.interactionFields || {};
+    S.formFields = b.formFields || []; S.extraFields = b.extraFields || []; S.editable = b.editable || [];
+    document.title = `${S.appName} canvass`;
   }
 
   (async () => {

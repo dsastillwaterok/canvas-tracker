@@ -1,0 +1,195 @@
+{
+  "appName": "Woodland Manor",
+  "timeZone": "America/Chicago",
+  "tabs": {
+    "tenants": "Tenants",
+    "interactions": "Interactions",
+    "lists": "Lists",
+    "dashboard": "Dashboard"
+  },
+  "columns": {
+    "tenants": {
+      "building": "Building",
+      "unit": "Unit",
+      "name": "Name",
+      "phone": "Phone",
+      "email": "Email",
+      "language": "Preferred language",
+      "accessibility": "Accessibility / visit notes",
+      "residents": "Residents in unit",
+      "housing": "Housing assistance",
+      "groupChat": "In group chat?",
+      "groupMsgOk": "Group message OK?",
+      "status": "Status",
+      "socialLead": "Social lead?",
+      "connected": "Connected to (units or names)",
+      "ocMember": "OC member?",
+      "translator": "Translator?",
+      "stay": "Planning to stay?",
+      "lawyer": "Lawyer contact given?",
+      "grievanceTypes": "Grievance types",
+      "grievances": "Grievances",
+      "organizer": "Organizer",
+      "notes": "Notes",
+      "lastContact": "Last contact",
+      "lastResponse": "Last response",
+      "contacts": "Contacts logged",
+      "contactStatus": "Contact status",
+      "key": "Unit key"
+    },
+    "interactions": {
+      "date": "Date",
+      "unit": "Unit",
+      "building": "Building",
+      "who": "Who you talked to",
+      "canvasser": "Canvasser",
+      "type": "Type",
+      "response": "Response",
+      "discussed": "What was discussed",
+      "followUp": "Follow-up needed",
+      "followUpDate": "Follow-up date",
+      "done": "Follow-up done?",
+      "key": "Unit key"
+    },
+    "lists": {
+      "statuses": "Status",
+      "languages": "Language",
+      "types": "Interaction type",
+      "responses": "Response",
+      "canvassers": "Canvassers",
+      "stay": "Planning to stay",
+      "grievanceTypes": "Grievance type",
+      "links": "Personal form link",
+      "buildings": "Building"
+    }
+  },
+  "checkboxFields": {
+    "tenants": [
+      "groupChat",
+      "groupMsgOk",
+      "socialLead",
+      "ocMember",
+      "translator",
+      "lawyer"
+    ],
+    "interactions": [
+      "done"
+    ]
+  },
+  "formulaFields": {
+    "tenants": [
+      "lastContact",
+      "lastResponse",
+      "contacts",
+      "contactStatus",
+      "key"
+    ],
+    "interactions": [
+      "key"
+    ]
+  },
+  "editableFields": [
+    "name",
+    "phone",
+    "email",
+    "status",
+    "groupChat",
+    "socialLead",
+    "accessibility",
+    "residents",
+    "housing",
+    "grievanceTypes",
+    "grievances",
+    "connected",
+    "notes"
+  ],
+  "formFields": [
+    "who",
+    "discussed",
+    "followUp",
+    "followUpDate",
+    "phone",
+    "email"
+  ],
+  "extraFields": [],
+  "newUnitStatus": {
+    "whenResponseIs": {
+      "No answer": "No answer"
+    },
+    "otherwise": "Contacted"
+  },
+  "contactStatus": {
+    "staleAfterDays": 30,
+    "deadEndStatuses": [
+      "Moved out",
+      "Declined"
+    ],
+    "labels": {
+      "deadEnd": "Dead end",
+      "never": "Never contacted",
+      "overdue": "Overdue: {days} days",
+      "recent": "Contacted {days} days ago"
+    }
+  },
+  "defaultLists": {
+    "statuses": [
+      "Not contacted",
+      "No answer",
+      "Contacted",
+      "Supportive",
+      "Member",
+      "Declined",
+      "Moved out"
+    ],
+    "languages": [
+      "English",
+      "Spanish",
+      "Other"
+    ],
+    "types": [
+      "Door knock",
+      "Phone call",
+      "Text",
+      "Meeting",
+      "Other"
+    ],
+    "responses": [
+      "No answer",
+      "Talked",
+      "Wants to join",
+      "Not interested",
+      "Come back later"
+    ],
+    "canvassers": [],
+    "stay": [
+      "Yes",
+      "No",
+      "Unsure"
+    ],
+    "grievanceTypes": [
+      "Trash",
+      "Pests",
+      "Mold",
+      "Air quality",
+      "Air conditioning",
+      "Heating",
+      "Hot water",
+      "Plumbing",
+      "Appliances",
+      "Unit repairs",
+      "Grounds",
+      "Exterior lighting",
+      "Safety hazards",
+      "Locks / security",
+      "Accessibility",
+      "Fees",
+      "Rent",
+      "Eviction notices",
+      "Abatement / inspections",
+      "Maintenance responsiveness",
+      "Communication",
+      "Retaliation"
+    ],
+    "buildings": []
+  }
+}
