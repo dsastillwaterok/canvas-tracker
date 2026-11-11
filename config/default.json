@@ -202,5 +202,6 @@
     ],
     "buildings": []
   },
-  "linkMessage": "Hi {name}, here is your personal link for the {appName} canvass app:\n\n{link}\n\nOpen it on your phone, then use Share > Add to Home Screen so it is one tap next time. The link signs you in as you, so please don't forward it. Reply here with any questions."
+  "sessionDays": 3,
+  "linkMessage": "Hi {name}, here is your link for the {appName} canvass app:\n\n{link}\n\nIt signs you in as you through {until}, then stops working; you'll get a fresh one before each canvass. Open it on your phone and use Share > Add to Home Screen so the app is one tap away. Please don't forward it. Reply here with any questions."
 }

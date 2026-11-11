@@ -132,15 +132,37 @@ const seed = require('./seed');
   // ---- keys and auth -------------------------------------------------------------
   assert.strictEqual(makeKey('8659', 'TBD-Carol'), '8659-TBD-Carol');
   assert.strictEqual(makeKey('', '9'), '9');
-  const tok = auth.tokenFor('s3cret', 'Ben K');
-  assert.strictEqual(auth.nameForToken('s3cret', tok, lists.canvassers), 'Ben K');
-  assert.strictEqual(auth.nameForToken('other', tok, lists.canvassers), null);
-  const ck = auth.cookieValue('s3cret', 'Ben K');
-  assert.strictEqual(auth.nameFromCookie('s3cret', ck), 'Ben K');
-  assert.strictEqual(auth.nameFromCookie('s3cret', ck + 'x'), null);
+  const now = 1_700_000_000_000;
+  const DAY = 86400e3;
+  // Personal links: expire, verify, reject tampering and removed names.
+  const tok = auth.personalToken('s3cret', 'Ben K', now + 3 * DAY);
+  assert.strictEqual(auth.resolvePersonalToken('s3cret', tok, lists.canvassers, now).name, 'Ben K');
+  assert.strictEqual(auth.resolvePersonalToken('s3cret', tok, lists.canvassers, now).expires, now + 3 * DAY);
+  assert.match(auth.resolvePersonalToken('s3cret', tok, lists.canvassers, now + 4 * DAY).reason, /expired/);
+  assert.match(auth.resolvePersonalToken('other', tok, lists.canvassers, now).reason, /earlier canvass/);
+  assert.match(auth.resolvePersonalToken('s3cret', tok.slice(0, -1) + 'x', lists.canvassers, now).reason, /earlier canvass/, 'a bad signature reads as an old link: the likelier cause');
+  assert.match(auth.resolvePersonalToken('s3cret', tok, ['Someone Else'], now).reason, /no longer active/);
+  // Starting a new canvass (a new epoch) invalidates the old canvass's links and sessions.
+  const tokE = auth.personalToken('s3cret', 'Ben K', now + DAY, 111);
+  assert.strictEqual(auth.resolvePersonalToken('s3cret', tokE, lists.canvassers, now, 111).name, 'Ben K');
+  assert.match(auth.resolvePersonalToken('s3cret', tokE, lists.canvassers, now, 222).reason, /earlier canvass/);
+  assert.strictEqual(auth.nameFromCookie('s3cret', auth.cookieValue('s3cret', 'Ben K', now + DAY, 111), now, 222), null);
+  assert.match(auth.personalLink('https://x.org/', 's3cret', 'Ben K', now + DAY), /^https:\/\/x\.org\/c\/[A-Za-z0-9_-]{12}\.\d+\.[A-Za-z0-9_-]{24}$/);
+  // Cookies carry the same expiry.
+  const ck = auth.cookieValue('s3cret', 'Ben K', now + 3 * DAY);
+  assert.strictEqual(auth.nameFromCookie('s3cret', ck, now), 'Ben K');
+  assert.strictEqual(auth.nameFromCookie('s3cret', ck, now + 3 * DAY + 1), null);
+  assert.strictEqual(auth.nameFromCookie('s3cret', ck + 'x', now), null);
+  assert.strictEqual(auth.nameFromCookie('other', ck, now), null);
+  // Email sign-in links work once.
+  const lt = auth.loginToken('s3cret', 'Ben K', now + 15 * 60e3);
+  assert.strictEqual(auth.resolveLoginToken('s3cret', lt, lists.canvassers, now).name, 'Ben K');
+  assert.match(auth.resolveLoginToken('s3cret', lt, lists.canvassers, now).reason, /already used/);
+  const lt2 = auth.loginToken('s3cret', 'Ben K', now + 1000);
+  assert.match(auth.resolveLoginToken('s3cret', lt2, lists.canvassers, now + 2000).reason, /expired/);
+  assert.match(auth.resolveLoginToken('s3cret', tok, lists.canvassers, now).reason, /not valid/, 'a personal link is not a login link');
 
   // Sign-up links: valid, expired, cancelled, tampered.
-  const now = 1_700_000_000_000;
   const jt = auth.joinToken('s3cret', now, now + 86400e3);
   assert.strictEqual(auth.parseJoinToken('s3cret', jt, { now: now + 1000 }).ok, true);
   assert.match(auth.parseJoinToken('s3cret', jt, { now: now + 2 * 86400e3 }).reason, /expired/);
@@ -152,6 +174,9 @@ const seed = require('./seed');
   assert.strictEqual(added.created, true);
   const again = await tr.addCanvasser('zed q', '');
   assert.strictEqual(again.created, false);
+  const byEmail = await tr.addCanvasser('Zedediah Quill', 'ZED@example.org');
+  assert.strictEqual(byEmail.created, false, 'a known email is the same person whatever name they typed');
+  assert.strictEqual(byEmail.name, 'Zed Q');
   assert.strictEqual((await tr.canvassers()).filter((c) => c.name === 'Zed Q').length, 1);
   await tr.markLinkSent('Zed Q');
   assert.ok((await tr.canvassers()).find((c) => c.name === 'Zed Q').linkSent);

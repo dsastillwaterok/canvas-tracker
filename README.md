@@ -11,12 +11,12 @@ Built for the Woodland Manor campaign of the Oklahoma Tenants Union. Made to be 
 - **A log form** with big tappable buttons for how and what happened, free text for the rest. Saving writes the conversation to the sheet and creates the tenant's row if the unit is new.
 - **Edit details** from the phone: status, tags, contact info, notes.
 
-No Google sign-in. Each canvasser gets a personal link that signs them in; removing their name from the sheet revokes it.
+No Google sign-in and no passwords. Before each canvass an organizer shows a QR code; scanning it signs a canvasser in until the canvass ends (a few days), then everyone's access lapses on its own. Removing a name from the sheet revokes it at once.
 
 ## What organizers get
 
 - The sheet, exactly as before. The app adds rows and edits cells; formulas, filters and the Dashboard keep working.
-- `/admin`: a setup wizard, the list of personal links, and an overview of which fields are in use.
+- `/admin`: a setup wizard, the sign-in QR code for the current canvass, a link per person for anyone who can't scan, and an overview of which fields are in use.
 - Settings stored in a hidden tab inside the sheet, so they move with the data if the sheet changes hands.
 
 ## Set it up
@@ -68,15 +68,17 @@ Open `https://your-domain/admin?key=YOUR_ADMIN_KEY`.
 
 If the sheet already matches the default layout (the Woodland Manor one, headers in `config/default.json`), the app configures itself on first start and the wizard is only needed to change things.
 
-### 5. Canvassers and their links
+### 5. Canvassers and signing in
 
-After setup, a skippable **Canvassers** step lets you add names and optional emails (stored on the lists tab; emails go in a "Canvasser email" column if the sheet has one). Then **Links** shows a personal link per person with three buttons: *Email* and *Text* open your own mail or messages app with a ready-written message containing their link, *Copy link* copies it. Nothing is sent by the app itself; the link comes from a person they know. On a phone they open it once and "Add to Home Screen".
+Sign-in is granted per canvass, not per person forever. Open **This canvass** in `/admin`:
 
-Add or remove a canvasser on the Canvassers step (or by editing the sheet). A removed name's link stops working on the next request. The message template is editable on the same step.
+- It shows a **QR code** (and the link behind it) for the current canvass, good for the default lifetime you set on the Canvassers step (3 days out of the box, up to a week). Project it at the kickoff, print the full-screen version, or paste the link into the group chat. Whoever scans it enters their email and name and is signed in until the canvass ends. A known email signs in as that person, whatever name they typed; a new email is added to the lists tab. Nothing is emailed to anyone automatically, so people who skip an event never hear about it.
+- **Start a new sign-up link** before the next canvass. It signs everyone out: the old code, every personal link, and every phone that used them.
+- **Links for one person**, for anyone who can't scan: *Email* and *Text* open your own mail or messages app with a ready-written message; *Copy link* copies it. These expire with the canvass too.
 
-**Let people sign themselves up.** On the Canvassers step, create a sign-up link good for a day to a month and paste it into the volunteer group chat. Whoever opens it enters a name and optional email, is added to the lists tab, and lands in the app already signed in with their personal link and home-screen instructions. "Cancel all sign-up links" invalidates every outstanding one.
+The skippable **Canvassers** step is the list of who may sign in, with their emails (stored on the lists tab; emails go in a "Canvasser email" column if the sheet has one), the default canvass length, and the message template.
 
-**Send the links from the app (optional).** Set these variables and the Links page gains *Send email* per person and *Send to everyone not yet sent*; each send stamps the date in a "Link sent" column on the lists tab if one exists.
+**Email sign-in (optional).** Set the SMTP variables below and two things appear: a *Send email* button per person on This canvass, and *Sign in with your email* on the locked screen, which emails a one-time link (good for 15 minutes) to anyone whose email is on the list. That's the way back in for someone who left before the QR code went up.
 
 | Name | What |
 |---|---|
@@ -86,7 +88,7 @@ Add or remove a canvasser on the Canvassers step (or by editing the sheet). A re
 | `SMTP_PASS` | its password. For Gmail, an **app password** (Google Account > Security > 2-Step Verification > App passwords), not the account password |
 | `MAIL_FROM` | optional display form, e.g. `Riverside Tenants <riverside@gmail.com>` |
 
-Without them, the Email and Text buttons open your own mail or messages app, which is a fine way to run a small team.
+For local development, `MAIL_LOG=1` prints emails to the console instead of sending them.
 
 ## How the sheet is used
 
@@ -94,7 +96,7 @@ Without them, the Email and Text buttons open your own mail or messages app, whi
 |---|---|
 | Tenants | reads every row with a unit; writes a new row when a new unit is logged; edits the fields listed in `editableFields` |
 | Interactions | writes one row per saved conversation, after the last row that has a date |
-| Lists | reads dropdown choices and canvasser names; writes personal links if a links column exists |
+| Lists | reads dropdown choices, canvasser names and emails; writes personal links if a links column exists |
 | Formula columns | never written. The app writes `null` for those cells, which the Sheets API treats as "leave alone" |
 
 Columns are found by header text, never by position, so you can reorder or insert columns freely. The "last filled row" is found from the unit / date column, because checkbox columns put a value on every row down to 1000 and would otherwise fool an append.
@@ -112,6 +114,8 @@ The key that links a conversation to a tenant is `building-unit` (`8659-4`) or j
 - `editableFields`: tenant fields organizers may change from the phone
 - `formFields`: which optional questions the door form shows (`who`, `discussed`, `followUp`, `followUpDate`, `phone`, `email`)
 - `extraFields`: `[{ "header": "Documentation available?", "label": "Documentation?", "kind": "text" | "textarea" }]`, extra questions written to the conversations tab by header
+- `sessionDays`: how long a canvass's sign-in lasts by default (1 to 7). `event` and `joinNotBefore` are written by the This canvass page.
+- `linkMessage`: the text sent with a personal link; placeholders `{name}`, `{appName}`, `{link}`, `{until}`
 - `newUnitStatus`: status given to a tenant row created from a conversation, by response
 - `contactStatus`: stale window, dead-end statuses, and label text used by the built formula
 - `defaultLists`: dropdown choices the build wizard starts from
@@ -122,19 +126,19 @@ To change settings for a sheet that's already configured, re-run the mapping wiz
 
 ```
 npm install
-npm run dev          # mock sheet with invented sample data; admin key and secret are "dev"
+npm run dev          # mock sheet with invented sample data; admin key and secret are "dev"; emails print to the console
 npm run dev:blank    # mock blank sheet, to try the build wizard
 npm test             # tracker, schema, wizard logic, auth
 ```
 
-Local URLs: `http://localhost:3000/admin?key=dev`. Personal links are listed there.
+Local URLs: `http://localhost:3000/admin?key=dev`. The sign-in QR and personal links are under This canvass.
 
 Code map: `server.js` (routes), `lib/schema.js` (headers to columns), `lib/tracker.js` (read/write logic), `lib/setup.js` (inspect, guess, build, saved settings), `lib/admin.js` (organizer pages), `lib/auth.js` (links and cookies), `public/` (the canvasser UI, one file of plain JS).
 
 ## Privacy notes
 
 - Tenant data stays in your Google Sheet and in the browser of a signed-in canvasser. The app server holds it in memory for 15 seconds at a time (a read cache) and logs nothing about tenants.
-- Personal links are bearer tokens: anyone with the link can log as that person. Don't post them publicly. Rotate everyone's links by changing `APP_SECRET`.
+- Sign-in links and cookies are signed bearer tokens that expire with the canvass; nothing is stored server-side. Anyone with a live personal link can log as that person, so don't post those publicly (the QR link is meant to be shared, and only creates or matches a name). Starting a new canvass, or changing `APP_SECRET`, signs everyone out.
 - The service account key gives full edit access to any sheet shared with it. Keep it in the host's secret store only.
 - This repo's sample data is invented. Keep it that way in your fork: never commit a real sheet export.
 

@@ -64,7 +64,7 @@ app.use('/admin', admin.router(ctx));
 
 async function currentCanvasser(req) {
   if (!ctx.configured) return null;
-  const name = auth.nameFromCookie(APP_SECRET, req.cookies[auth.COOKIE]);
+  const name = auth.nameFromCookie(APP_SECRET, req.cookies[auth.COOKIE], Date.now(), epoch());
   if (!name) return null;
   const { canvassers } = await ctx.tracker.lists();
   return canvassers.includes(name) ? name : null;
@@ -80,50 +80,110 @@ async function requireCanvasser(req, res, next) {
   } catch (e) { next(e); }
 }
 
+const DAY = 24 * 3600 * 1000;
+function sessionDays() { return Math.min(7, Math.max(1, parseInt(ctx.config?.sessionDays, 10) || 3)); }
+const epoch = () => (ctx.config?.event?.issued) || 0; // the current canvass; see lib/auth.js
+function signIn(req, res, name, expires) {
+  res.cookie(auth.COOKIE, auth.cookieValue(APP_SECRET, name, expires, epoch()), { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: Math.max(0, expires - Date.now()), path: '/' });
+}
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function gatePage(title, body) {
+  const name = ctx.config?.appName || 'Canvass';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><link rel="stylesheet" href="/static/style.css"></head><body class="gate"><main class="gate-box"><p class="plate">${esc(name)}</p>${body}</main></body></html>`;
+}
+// The locked-out screen. Offers email sign-in when the app can send mail.
+function gate(res, status, headline, detail) {
+  const loginBit = ctx.mailer
+    ? `<p><a class="btn primary block" href="/login">Sign in with your email</a></p><p class="hint">We'll email you a link that signs you in for the next few days.</p>`
+    : '';
+  res.status(status).set('Cache-Control', 'no-store').send(gatePage('Sign in', `<h1>${esc(headline)}</h1><p>${esc(detail)}</p>${loginBit}`));
+}
+const GATE_DEFAULT = ['Scan the code for this canvass to sign in.', 'Organizers show a QR code at each canvass; scanning it signs you in until the canvass ends. Missed it? Ask an organizer for the link.'];
+
 app.get('/c/:token', async (req, res, next) => {
   try {
-    if (!ctx.configured) return res.status(503).sendFile(path.join(__dirname, 'public', 'gate.html'));
+    if (!ctx.configured) return gate(res, 503, 'Not ready yet', 'An organizer still has to finish setting up the app.');
     const { canvassers } = await ctx.tracker.lists();
-    const name = auth.nameForToken(APP_SECRET, req.params.token, canvassers);
-    if (!name) return res.status(404).sendFile(path.join(__dirname, 'public', 'gate.html'));
-    res.cookie(auth.COOKIE, auth.cookieValue(APP_SECRET, name), { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 365 * 24 * 3600 * 1000, path: '/' });
+    const r = auth.resolvePersonalToken(APP_SECRET, req.params.token, canvassers, Date.now(), epoch());
+    if (!r.name) return gate(res, 410, r.reason, 'Links are issued per canvass and stop working when it ends.');
+    signIn(req, res, r.name, r.expires);
+    res.redirect('/');
+  } catch (e) { next(e); }
+});
+
+// ---- email sign-in (only when SMTP is configured) ----------------------------------
+const LOGIN_MINUTES = 15;
+app.get('/login', (req, res) => {
+  if (!ctx.mailer) return res.redirect('/');
+  res.set('Cache-Control', 'no-store').send(gatePage('Sign in', `<h1>Sign in with your email</h1>
+<p>Enter the email an organizer has on file for you. We'll send a link that signs you in for ${sessionDays()} day${sessionDays() === 1 ? '' : 's'}.</p>
+<form method="post" action="/login">
+<div class="field"><label for="email">Email</label><input class="text" id="email" name="email" type="email" required autocomplete="email" autofocus></div>
+<div class="field"><button class="btn primary block">Email me a sign-in link</button></div>
+</form>`));
+});
+app.post('/login', express.urlencoded({ extended: false }), async (req, res, next) => {
+  try {
+    if (!ctx.mailer || !ctx.configured) return res.redirect('/');
+    const email = String(req.body.email || '').trim().toLowerCase().slice(0, 120);
+    const who = (await ctx.tracker.canvassers()).find((c) => c.email && c.email.toLowerCase() === email);
+    if (who) {
+      const expires = Date.now() + LOGIN_MINUTES * 60 * 1000;
+      const link = `${ctx.baseUrl(req).replace(/\/$/, '')}/login/${auth.loginToken(APP_SECRET, who.name, expires)}`;
+      await ctx.mailer.send({ to: who.email, subject: `Sign in to ${ctx.config.appName}`, text: `Hi ${who.name.split(' ')[0]}, tap this to sign in to the ${ctx.config.appName} canvass app:\n\n${link}\n\nIt works once, within ${LOGIN_MINUTES} minutes. If you didn't ask for it, ignore this email.` });
+    }
+    // Same answer either way, so the form can't be used to find out who's on the list.
+    res.set('Cache-Control', 'no-store').send(gatePage('Check your email', `<h1>Check your email</h1><p>If ${esc(email)} is on the canvasser list, a sign-in link is on its way. It works once, within ${LOGIN_MINUTES} minutes.</p><p class="hint">Nothing arrived? Check spam, or ask an organizer whether this is the email they have for you.</p>`));
+  } catch (e) { next(e); }
+});
+app.get('/login/:token', async (req, res, next) => {
+  try {
+    if (!ctx.configured) return gate(res, 503, 'Not ready yet', 'An organizer still has to finish setting up the app.');
+    const { canvassers } = await ctx.tracker.lists();
+    const r = auth.resolveLoginToken(APP_SECRET, req.params.token, canvassers);
+    if (!r.name) return gate(res, 410, r.reason, 'Sign-in links work once, within a few minutes of being sent.');
+    const ev = ctx.config.event && ctx.config.event.expires > Date.now() ? ctx.config.event : null;
+    signIn(req, res, r.name, ev ? ev.expires : Date.now() + sessionDays() * DAY);
     res.redirect('/');
   } catch (e) { next(e); }
 });
 
 // ---- self-registration ----------------------------------------------------------
-const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-function joinPage(body) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Join the canvass</title><link rel="stylesheet" href="/static/style.css"></head><body class="gate"><main class="gate-box">${body}</main></body></html>`;
-}
-app.get('/join/:token', express.urlencoded({ extended: false }), (req, res) => {
-  if (!ctx.configured) return res.status(503).send(joinPage('<h1>Not ready yet</h1><p>An organizer still has to finish setting up the app.</p>'));
-  const t = auth.parseJoinToken(APP_SECRET, req.params.token, { notBefore: ctx.config.joinNotBefore || 0 });
-  if (!t.ok) return res.status(410).send(joinPage(`<p class="plate">${esc(ctx.config.appName)}</p><h1>${esc(t.reason)}</h1>`));
-  res.set('Cache-Control', 'no-store');
-  res.send(joinPage(`<p class="plate">${esc(ctx.config.appName)}</p><h1>Sign up to canvass</h1>
-<p>Your name is how conversations you log get credited. Email is optional; organizers use it to reach you.</p>
+const joinPage = (body) => gatePage('Sign in to canvass', body);
+const fmtUntil = (ms) => new Date(ms).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: ctx.config?.timeZone || 'UTC' });
+async function emailColumn() { return (await ctx.schema.tab('lists')).canvasserEmails >= 0; }
+app.get('/join/:token', async (req, res, next) => {
+  try {
+    if (!ctx.configured) return res.status(503).send(joinPage('<h1>Not ready yet</h1><p>An organizer still has to finish setting up the app.</p>'));
+    const t = auth.parseJoinToken(APP_SECRET, req.params.token, { notBefore: ctx.config.joinNotBefore || 0 });
+    if (!t.ok) return gate(res, 410, t.reason, 'Sign-up links are made per canvass and stop working when it ends.');
+    if (await currentCanvasser(req)) return res.redirect('/'); // already signed in on this phone
+    const needEmail = await emailColumn();
+    res.set('Cache-Control', 'no-store');
+    res.send(joinPage(`<h1>Sign in to canvass</h1>
+<p>${needEmail ? 'Your email is how we recognize you next time; your name is how conversations you log get credited.' : 'Your name is how conversations you log get credited.'}</p>
 <form method="post" action="/join/${esc(req.params.token)}">
-<div class="field"><label for="name">Your name</label><input class="text" id="name" name="name" required autocomplete="name" placeholder="First name and last initial is fine"></div>
-<div class="field"><label for="email">Email <span class="hint">optional</span></label><input class="text" id="email" name="email" type="email" autocomplete="email"></div>
-<div class="field"><button class="btn primary block">Sign me up</button></div>
-</form>`));
+${needEmail ? '<div class="field"><label for="email">Email</label><input class="text" id="email" name="email" type="email" required autocomplete="email" autofocus></div>' : ''}
+<div class="field"><label for="name">Your name</label><input class="text" id="name" name="name" required autocomplete="name" placeholder="First name and last initial is fine" ${needEmail ? '' : 'autofocus'}></div>
+<div class="field"><button class="btn primary block">Sign me in</button></div>
+</form>
+<p class="hint">Signed in until ${esc(fmtUntil(t.expires))}.</p>`));
+  } catch (e) { next(e); }
 });
 app.post('/join/:token', express.urlencoded({ extended: false }), async (req, res, next) => {
   try {
     if (!ctx.configured) return res.status(503).send(joinPage('<h1>Not ready yet</h1>'));
     const t = auth.parseJoinToken(APP_SECRET, req.params.token, { notBefore: ctx.config.joinNotBefore || 0 });
-    if (!t.ok) return res.status(410).send(joinPage(`<h1>${esc(t.reason)}</h1>`));
+    if (!t.ok) return gate(res, 410, t.reason, 'Sign-up links are made per canvass and stop working when it ends.');
     const name = String(req.body.name || '').trim().slice(0, 80);
-    const email = String(req.body.email || '').trim().slice(0, 120);
-    if (!name) return res.status(400).send(joinPage('<h1>Name is required</h1><p><a href="">Try again</a></p>'));
+    const email = String(req.body.email || '').trim().toLowerCase().slice(0, 120);
+    const needEmail = await emailColumn();
+    if (!name || (needEmail && !email)) return res.status(400).send(joinPage(`<h1>${needEmail ? 'Name and email are both needed' : 'Name is required'}</h1><p><a href="">Try again</a></p>`));
     const c = await ctx.tracker.addCanvasser(name, email);
-    res.cookie(auth.COOKIE, auth.cookieValue(APP_SECRET, c.name), { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: 365 * 24 * 3600 * 1000, path: '/' });
-    const link = auth.personalLink(ctx.baseUrl(req), APP_SECRET, c.name);
-    res.send(joinPage(`<p class="plate">${esc(ctx.config.appName)}</p><h1>You're in, ${esc(c.name.split(' ')[0])}.</h1>
-<p>This is your personal link. It signs you in on any phone, so keep it to yourself:</p>
-<p><a class="tel" href="${esc(link)}">${esc(link)}</a></p>
-<p>On your phone: open it, then use Share > <strong>Add to Home Screen</strong>. After that the app is one tap away.</p>
+    signIn(req, res, c.name, t.expires);
+    res.send(joinPage(`<h1>You're in, ${esc(c.name.split(' ')[0])}.</h1>
+<p>Signed in on this phone until ${esc(fmtUntil(t.expires))}. Use Share > <strong>Add to Home Screen</strong> so the app is one tap away.</p>
+<p>At the next canvass, scan the new code${ctx.mailer && c.email ? ' or sign in with your email' : ''}.</p>
 <p><a class="btn primary block" href="/">Open the app</a></p>`));
   } catch (e) { next(e); }
 });
@@ -132,11 +192,14 @@ app.get('/', async (req, res, next) => {
   try {
     const name = await currentCanvasser(req);
     res.set('Cache-Control', 'no-store');
-    res.sendFile(path.join(__dirname, 'public', name ? 'index.html' : 'gate.html'));
+    if (name) return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    if (!ctx.configured) return gate(res, 503, 'Not ready yet', 'An organizer still has to finish setting up the app.');
+    if (req.cookies[auth.COOKIE]) return gate(res, 200, 'Your sign-in has ended.', 'Sign-in is granted per canvass and ends with it. Scan the code for this canvass' + (ctx.mailer ? ', sign in with your email,' : '') + ' or ask an organizer for a link.');
+    gate(res, 200, GATE_DEFAULT[0], GATE_DEFAULT[1]);
   } catch (e) { next(e); }
 });
 
-app.get('/healthz', (req, res) => res.json({ ok: true, configured: ctx.configured, version: VERSION }));
+app.get('/healthz', (req, res) => res.json({ ok: true, configured: ctx.configured, version: VERSION, emailLogin: !!ctx.mailer }));
 
 // ---- API ---------------------------------------------------------------------
 

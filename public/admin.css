@@ -48,3 +48,12 @@ form.inline label { display: inline; margin: 0 8px 0 0; }
 form.inline select { display: inline-block; width: auto; margin: 0 6px; }
 .admin input.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; width: 100%; display: inline-block; }
 .btn.small.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* This canvass: QR + explanation side by side, stacked on phones */
+.event { display: flex; gap: 24px; align-items: flex-start; margin: 16px 0 12px; }
+.event .qr { flex: 0 0 220px; width: 220px; background: #fff; padding: 8px; border: 1px solid var(--line, #ddd); border-radius: 8px; }
+.event .qr svg { display: block; width: 100%; height: auto; }
+.event .event-text { flex: 1; min-width: 0; }
+.event .event-text p { margin: 0 0 10px; }
+.event input.mono { width: 100%; }
+@media (max-width: 600px) { .event { flex-direction: column; } .event .qr { width: min(100%, 260px); flex-basis: auto; } }

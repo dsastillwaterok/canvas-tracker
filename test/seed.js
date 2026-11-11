@@ -12,7 +12,7 @@ module.exports = function seed(config) {
   const TI = idx('tenants'), II = idx('interactions'), LI = idx('lists');
 
   // Lists tab from the config defaults, plus sample canvassers and buildings.
-  const lists = { ...cfg.defaultLists, canvassers: ['Ana L', 'Ben K', 'Cal M', 'Dee P'], buildings: ['8633', '8645', '8651', '8653', '8659', '8663', '8667', '8669', '8671', '8673'] };
+  const lists = { ...cfg.defaultLists, canvassers: ['Ana L', 'Ben K', 'Cal M', 'Dee P'], canvasserEmails: ['ana@example.org', 'ben@example.org', '', ''], buildings: ['8633', '8645', '8651', '8653', '8659', '8663', '8667', '8669', '8671', '8673'] };
   const n = Math.max(...Object.values(lists).map((a) => a.length));
   const Lists = [headerRow('lists')];
   for (let i = 0; i < n; i++) {

@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "MOCK_SHEET=1 APP_SECRET=dev ADMIN_KEY=dev node server.js",
+    "dev": "MOCK_SHEET=1 APP_SECRET=dev ADMIN_KEY=dev MAIL_LOG=1 node server.js",
     "test": "node test/smoke.js",
     "dev:blank": "MOCK_SHEET=blank APP_SECRET=dev ADMIN_KEY=dev node server.js"
   },
@@ -17,6 +17,7 @@
     "cookie-parser": "^1.4.6",
     "express": "^4.19.2",
     "googleapis": "^144.0.0",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^6.10.1",
+    "qrcode": "^1.5.4"
   }
 }
