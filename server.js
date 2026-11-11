@@ -56,7 +56,9 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
-app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
+// Revalidate on every load (ETag 304s are cheap); a canvasser's phone must never run a stale app.js.
+app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: true, lastModified: true }));
+const VERSION = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_SHA || 'dev').slice(0, 7);
 app.use('/admin', admin.router(ctx));
 
 async function currentCanvasser(req) {
@@ -91,11 +93,12 @@ app.get('/c/:token', async (req, res, next) => {
 app.get('/', async (req, res, next) => {
   try {
     const name = await currentCanvasser(req);
+    res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(__dirname, 'public', name ? 'index.html' : 'gate.html'));
   } catch (e) { next(e); }
 });
 
-app.get('/healthz', (req, res) => res.json({ ok: true, configured: ctx.configured }));
+app.get('/healthz', (req, res) => res.json({ ok: true, configured: ctx.configured, version: VERSION }));
 
 // ---- API ---------------------------------------------------------------------
 
