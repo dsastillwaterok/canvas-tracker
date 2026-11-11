@@ -223,7 +223,7 @@
           </div>
         </div>
 
-        ${t.accessibility ? h`<div class="section"><div class="notice">Before you knock: ${esc(t.accessibility)}</div></div>` : ''}
+        ${t.accessibility ? h`<div class="section"><div class="notice"><span class="notice-label">${esc((S.headers && S.headers.accessibility) || 'Visit notes')}</span><span class="notice-why">Read before you knock. Edit under tenant details.</span>${esc(t.accessibility)}</div></div>` : ''}
         ${due ? h`<div class="section"><div class="notice go">Follow-up due ${esc(due.followUpDate)}: ${esc(due.followUp || 'see last conversation')}
           <div style="margin-top:8px"><button class="btn quiet" data-done="${due.row}">Mark done</button></div></div></div>` : ''}
 
@@ -622,7 +622,7 @@
   async function refreshList() {
     const b = await api('/api/bootstrap');
     S.me = b.me; S.appName = b.appName; S.lists = b.lists; S.tenants = b.tenants; S.interactions = b.interactions || []; S.people = b.people || [];
-    S.features = b.features || {}; S.formSpec = b.form || []; S.tagGroups = b.tagGroups || []; S.editable = b.editable || [];
+    S.features = b.features || {}; S.formSpec = b.form || []; S.tagGroups = b.tagGroups || []; S.editable = b.editable || []; S.headers = b.headers || {};
     document.title = `${S.appName} canvass`;
   }
 

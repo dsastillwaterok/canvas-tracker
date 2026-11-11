@@ -224,6 +224,7 @@ app.get('/api/bootstrap', requireCanvasser, async (req, res, next) => {
       features,
       form: form.availableFields(form.formSpec(ctx.config), { interactions: icols, tenants: tcols }),
       tagGroups: ctx.config.tagGroups || [],
+      headers: ctx.config.columns.tenants, // sheet header per tenant field, for labels on the phone
       editable: ctx.config.editableFields || [],
       lists,
       // Whole rows, so the phone can open a tenant without a round trip; the list uses a few fields.

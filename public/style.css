@@ -121,6 +121,8 @@ a { color: inherit; }
 .section h2 { font-size: 15px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
 .notice { background: var(--wait-bg); color: var(--wait); border-left: 4px solid var(--wait); padding: 10px 12px; border-radius: 0 var(--radius) var(--radius) 0; }
 .notice.go { background: var(--go-bg); color: var(--go); border-color: var(--go); }
+.notice-label { display: block; font-weight: 700; font-size: 14px; }
+.notice-why { display: block; font-size: 13px; opacity: 0.8; margin-bottom: 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips .tag { font-size: 14px; padding: 4px 10px; border-radius: 14px; background: var(--surface); }
 .section .detail { margin-top: 8px; font-size: 15px; color: var(--ink-2); white-space: pre-wrap; }
