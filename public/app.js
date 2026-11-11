@@ -228,13 +228,17 @@
         <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>` : ''}
       ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
         ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
-      ${show('phone') || show('email') ? h`<div class="field two">
-        ${show('phone') ? h`<div><label for="phone">Phone <span class="hint">if they gave it</span></label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>` : ''}
-        ${show('email') ? h`<div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>` : ''}
-      </div>` : ''}
-      ${show('okPhone') || show('okEmail') ? h`<div class="field"><span class="lbl">Did they say we can contact them? <span class="hint">leave unchecked if you didn't ask</span></span>
-        ${show('okPhone') ? h`<label class="toggle"><input type="checkbox" id="okPhone" ${f.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
-        ${show('okEmail') ? h`<label class="toggle"><input type="checkbox" id="okEmail" ${f.okEmail ? 'checked' : ''}> OK to email</label>` : ''}</div>` : ''}
+      ${show('phone') || show('email') || show('okPhone') || show('okEmail') ? h`<div class="field"><span class="lbl">Contact info <span class="hint">if they gave it. Tick the box only if they said we may use it.</span></span>
+        <div class="contact-pair">
+          ${show('phone') || show('okPhone') ? h`<div class="contact">
+            ${show('phone') ? h`<label for="phone">Phone</label><input class="text" id="phone" type="tel" value="${esc(f.phone)}">` : ''}
+            ${show('okPhone') ? h`<label class="toggle"><input type="checkbox" id="okPhone" ${f.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
+          </div>` : ''}
+          ${show('email') || show('okEmail') ? h`<div class="contact">
+            ${show('email') ? h`<label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}">` : ''}
+            ${show('okEmail') ? h`<label class="toggle"><input type="checkbox" id="okEmail" ${f.okEmail ? 'checked' : ''}> OK to email</label>` : ''}
+          </div>` : ''}
+        </div></div>` : ''}
       ${show('followUp') || show('followUpDate') ? h`<div class="field two">
         ${show('followUp') ? h`<div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>` : ''}
         ${show('followUpDate') ? h`<div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>` : ''}
@@ -250,14 +254,18 @@
       notes: t.notes || '', connected: t.connected || '', housing: t.housing || '', residents: t.residents || '', grievances: t.grievances || '',
     });
     return h`
-      <div class="field two">
-        ${can('name') ? h`<div><label for="e_name">Name</label><input class="text" id="e_name" value="${esc(e.name)}"></div>` : ''}
-        ${can('phone') ? h`<div><label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}"></div>` : ''}
-      </div>
-      ${can('email') ? h`<div class="field"><label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}"></div>` : ''}
-      ${can('okPhone') || can('okEmail') ? h`<div class="field"><span class="lbl">Contact permission</span>
-        ${can('okPhone') ? h`<label class="toggle"><input type="checkbox" id="e_okPhone" ${e.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
-        ${can('okEmail') ? h`<label class="toggle"><input type="checkbox" id="e_okEmail" ${e.okEmail ? 'checked' : ''}> OK to email</label>` : ''}</div>` : ''}
+      ${can('name') ? h`<div class="field"><label for="e_name">Name</label><input class="text" id="e_name" value="${esc(e.name)}"></div>` : ''}
+      ${can('phone') || can('email') || can('okPhone') || can('okEmail') ? h`<div class="field"><span class="lbl">Contact info <span class="hint">the box means they said we may use it</span></span>
+        <div class="contact-pair">
+          ${can('phone') || can('okPhone') ? h`<div class="contact">
+            ${can('phone') ? h`<label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}">` : ''}
+            ${can('okPhone') ? h`<label class="toggle"><input type="checkbox" id="e_okPhone" ${e.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
+          </div>` : ''}
+          ${can('email') || can('okEmail') ? h`<div class="contact">
+            ${can('email') ? h`<label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}">` : ''}
+            ${can('okEmail') ? h`<label class="toggle"><input type="checkbox" id="e_okEmail" ${e.okEmail ? 'checked' : ''}> OK to email</label>` : ''}
+          </div>` : ''}
+        </div></div>` : ''}
       ${can('status') ? h`<div class="field"><span class="lbl">Status</span><div class="choices" data-echoice="status">
         ${(S.lists.statuses || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.status === v}">${esc(v)}</button>`).join('')}</div></div>` : ''}
       ${can('housing') ? h`<div class="field"><span class="lbl">Housing assistance</span><div class="choices" data-echoice="housing">

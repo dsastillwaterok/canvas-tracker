@@ -156,6 +156,14 @@ details.more summary::before { content: '+ '; }
 details.more[open] summary::before { content: '– '; }
 .err { color: var(--stop); font-weight: 600; margin-top: 12px; }
 .toggle { display: flex; align-items: center; gap: 10px; min-height: var(--tap); }
+/* A contact field and its permission box are one unit: boxed together, the box reads as the field's switch. */
+.contact-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.contact { padding: 10px 12px 4px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.contact > label:not(.toggle) { display: block; font-weight: 600; margin-bottom: 6px; }
+.contact .text { background: var(--paper); }
+.contact .toggle { margin-top: 2px; font-size: 15px; }
+.contact:has(.toggle input:checked) { border-color: var(--ink); background: var(--paper); }
+@media (max-width: 420px) { .contact-pair { grid-template-columns: 1fr; } }
 .toggle input { width: 22px; height: 22px; }
 
 /* Toast */
