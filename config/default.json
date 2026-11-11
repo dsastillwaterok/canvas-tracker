@@ -59,6 +59,7 @@
       "types": "Interaction type",
       "responses": "Response",
       "canvassers": "Canvassers",
+      "canvasserEmails": "Canvasser email",
       "stay": "Planning to stay",
       "grievanceTypes": "Grievance type",
       "links": "Personal form link",
@@ -199,5 +200,6 @@
       "Retaliation"
     ],
     "buildings": []
-  }
+  },
+  "linkMessage": "Hi {name}, here is your personal link for the {appName} canvass app:\n\n{link}\n\nOpen it on your phone, then use Share > Add to Home Screen so it is one tap next time. The link signs you in as you, so please don't forward it. Reply here with any questions."
 }

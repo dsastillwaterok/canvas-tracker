@@ -34,3 +34,11 @@ table.map select { margin-top: 0; }
 .admin table:not(.map) { width: 100%; border-collapse: collapse; }
 .admin table:not(.map) td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); word-break: break-all; }
 .admin .btn { margin-top: 18px; }
+
+.btn.small { min-height: 36px; padding: 0 12px; font-size: 14px; margin: 2px 4px 2px 0; display: inline-flex; align-items: center; text-decoration: none; }
+table.links td.actions { white-space: nowrap; }
+table.people { width: 100%; border-collapse: collapse; }
+table.people th { text-align: left; font-size: 14px; color: var(--ink-2); padding: 0 8px 4px 0; }
+table.people td { padding: 4px 8px 4px 0; }
+table.people input { margin-top: 0; }
+pre.msg { white-space: pre-wrap; background: var(--paper); padding: 12px; border-radius: var(--radius); font: inherit; }

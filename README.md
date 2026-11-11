@@ -68,11 +68,11 @@ Open `https://your-domain/admin?key=YOUR_ADMIN_KEY`.
 
 If the sheet already matches the default layout (the Woodland Manor one, headers in `config/default.json`), the app configures itself on first start and the wizard is only needed to change things.
 
-### 5. Hand out links
+### 5. Canvassers and their links
 
-`/admin/links` lists a personal link per canvasser (from the Canvassers column on the lists tab). Send each person theirs; on a phone they open it once and "Add to Home Screen". The button on that page also writes the links into the sheet next to each name.
+After setup, a skippable **Canvassers** step lets you add names and optional emails (stored on the lists tab; emails go in a "Canvasser email" column if the sheet has one). Then **Links** shows a personal link per person with three buttons: *Email* and *Text* open your own mail or messages app with a ready-written message containing their link, *Copy link* copies it. Nothing is sent by the app itself; the link comes from a person they know. On a phone they open it once and "Add to Home Screen".
 
-Add a canvasser: add the name to the sheet, reload `/admin/links`. Remove one: delete the name.
+Add or remove a canvasser on the Canvassers step (or by editing the sheet). A removed name's link stops working on the next request. The message template is editable on the same step.
 
 ## How the sheet is used
 
