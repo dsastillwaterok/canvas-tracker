@@ -6,7 +6,7 @@ Built for the Woodland Manor campaign of the Oklahoma Tenants Union. Made to be 
 
 ## What canvassers get
 
-- **Search** by unit, building, or name. A "Needs a knock" filter shows units never contacted or overdue.
+- **Search** by unit, building, or name. A "Needs a knock" filter shows units never contacted or overdue (past the stale window, 30 days by default; it says "Overdue", not how long).
 - **A tenant screen**: status, phone (tap to call), a "before you knock" note, grievance tags, the last conversation, and any follow-up due with a "Mark done" button.
 - **A log form** with big tappable buttons for how and what happened, free text for the rest. Saving writes the conversation to the sheet and creates the tenant's row if the unit is new.
 - **Other people in the unit**: a button on the form (closed by default) opens name, phone, email and consent boxes for a roommate or family member. They're kept on an optional `Residents` tab, one row per person, and listed on the tenant screen. A switch on each person makes them the unit's main contact, trading places with the current one.

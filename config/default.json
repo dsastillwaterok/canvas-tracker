@@ -161,7 +161,7 @@
     "labels": {
       "deadEnd": "Dead end",
       "never": "Never contacted",
-      "overdue": "Overdue: {days} days",
+      "overdue": "Overdue",
       "recent": "Contacted {days} days ago"
     }
   },
