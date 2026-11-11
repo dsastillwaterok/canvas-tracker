@@ -51,10 +51,10 @@
     const st = sticky.get();
     return {
       building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '',
-      type: st.type || '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', extra: {},
+      type: st.type || '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', okPhone: false, okEmail: false, extra: {},
     };
   }
-  const show = (f) => S.formFields.includes(f) && (f === 'phone' || f === 'email' ? S.features[f] : S.interactionFields[f]);
+  const show = (f) => S.formFields.includes(f) && (['phone', 'email', 'okPhone', 'okEmail'].includes(f) ? S.features[f] : S.interactionFields[f]);
   const hasB = () => S.features.building;
 
   // A text box that suggests previous entries as you type but accepts anything new.
@@ -123,7 +123,10 @@
           <div class="line">
             <span>${esc(t.status)}</span>
             ${statusChip(t.contactStatus)}
-            ${t.phone ? h`<a class="tel" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>` : ''}
+            ${t.phone ? (S.features.okPhone && !t.okPhone
+              ? h`<span class="tel muted" title="Has not agreed to calls or texts">${esc(t.phone)} <span class="hint">(not OK'd for calls)</span></span>`
+              : h`<a class="tel" href="tel:${esc(t.phone.replace(/[^\d+]/g, ''))}">${esc(t.phone)}</a>`) : ''}
+            ${t.email ? (S.features.okEmail && !t.okEmail ? h`<span class="hint">${esc(t.email)} (not OK'd for email)</span>` : h`<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>`) : ''}
             ${t.housing ? h`<span>Housing assistance: ${esc(t.housing)}</span>` : ''}
             ${t.language && t.language !== 'English' ? h`<span>${esc(t.language)}</span>` : ''}
           </div>
@@ -197,6 +200,9 @@
         ${show('phone') ? h`<div><label for="phone">Phone <span class="hint">if they gave it</span></label><input class="text" id="phone" type="tel" value="${esc(f.phone)}"></div>` : ''}
         ${show('email') ? h`<div><label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}"></div>` : ''}
       </div>` : ''}
+      ${show('okPhone') || show('okEmail') ? h`<div class="field"><span class="lbl">Did they say we can contact them? <span class="hint">leave unchecked if you didn't ask</span></span>
+        ${show('okPhone') ? h`<label class="toggle"><input type="checkbox" id="okPhone" ${f.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
+        ${show('okEmail') ? h`<label class="toggle"><input type="checkbox" id="okEmail" ${f.okEmail ? 'checked' : ''}> OK to email</label>` : ''}</div>` : ''}
       ${show('followUp') || show('followUpDate') ? h`<div class="field two">
         ${show('followUp') ? h`<div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>` : ''}
         ${show('followUpDate') ? h`<div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>` : ''}
@@ -207,7 +213,7 @@
   function renderEdit(t) {
     const can = (f) => S.editable.includes(f) && S.features[f];
     const e = S.edit || (S.edit = {
-      name: t.name || '', phone: t.phone || '', email: t.email || '', status: t.status || '', groupChat: !!t.groupChat,
+      name: t.name || '', phone: t.phone || '', email: t.email || '', okPhone: !!t.okPhone, okEmail: !!t.okEmail, status: t.status || '', groupChat: !!t.groupChat,
       socialLead: !!t.socialLead, grievanceTypes: (t.grievanceTypes || []).slice(), accessibility: t.accessibility || '',
       notes: t.notes || '', connected: t.connected || '', housing: t.housing || '', residents: t.residents || '', grievances: t.grievances || '',
     });
@@ -217,6 +223,9 @@
         ${can('phone') ? h`<div><label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}"></div>` : ''}
       </div>
       ${can('email') ? h`<div class="field"><label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}"></div>` : ''}
+      ${can('okPhone') || can('okEmail') ? h`<div class="field"><span class="lbl">Contact permission</span>
+        ${can('okPhone') ? h`<label class="toggle"><input type="checkbox" id="e_okPhone" ${e.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
+        ${can('okEmail') ? h`<label class="toggle"><input type="checkbox" id="e_okEmail" ${e.okEmail ? 'checked' : ''}> OK to email</label>` : ''}</div>` : ''}
       ${can('status') ? h`<div class="field"><span class="lbl">Status</span><div class="choices" data-echoice="status">
         ${(S.lists.statuses || []).map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${e.status === v}">${esc(v)}</button>`).join('')}</div></div>` : ''}
       ${can('housing') ? h`<div class="field"><span class="lbl">Housing assistance</span><div class="choices" data-echoice="housing">
@@ -295,6 +304,10 @@
     on('#e_conn', 'input', (e) => { S.edit.connected = e.target.value; });
     on('#e_res', 'input', (e) => { S.edit.residents = e.target.value; });
     $app.querySelectorAll('[data-extra]').forEach((el) => el.addEventListener('input', (e) => { S.form.extra[el.dataset.extra] = e.target.value; }));
+    on('#okPhone', 'change', (e) => { S.form.okPhone = e.target.checked; });
+    on('#okEmail', 'change', (e) => { S.form.okEmail = e.target.checked; });
+    on('#e_okPhone', 'change', (e) => { S.edit.okPhone = e.target.checked; });
+    on('#e_okEmail', 'change', (e) => { S.edit.okEmail = e.target.checked; });
     on('#e_groupChat', 'change', (e) => { S.edit.groupChat = e.target.checked; });
     on('#e_socialLead', 'change', (e) => { S.edit.socialLead = e.target.checked; });
 

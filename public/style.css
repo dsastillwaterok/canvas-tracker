@@ -126,6 +126,7 @@ a { color: inherit; }
 .convo .body { margin-top: 4px; white-space: pre-wrap; }
 .linkish { background: none; border: 0; padding: 0; color: var(--ink-2); text-decoration: underline; font-size: 15px; }
 .tel { font-weight: 600; text-decoration: none; }
+.tel.muted { color: var(--ink-2); font-weight: 400; }
 
 /* Forms: big tappable choices, not dropdowns */
 .field { margin-top: 16px; }

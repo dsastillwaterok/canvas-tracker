@@ -41,6 +41,11 @@ const seed = require('./seed');
   assert.strictEqual(after.history.length, 2);
   assert.strictEqual(after.history[0].discussed, 'Roaches are back.');
   assert.strictEqual(after.phone, '(918) 555-0199');
+  assert.strictEqual(after.okPhone, false, 'consent is not implied by giving a number');
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', okPhone: true });
+  assert.strictEqual((await tr.tenant('8663-13')).okPhone, true);
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', okPhone: false });
+  assert.strictEqual((await tr.tenant('8663-13')).okPhone, true, 'an unchecked box on a later visit never revokes consent');
 
   // New unit creates the Tenants row with status from the response; no duplicates after.
   const r2 = await tr.logInteraction({ building: '8645', unit: '7', canvasser: 'Ben K', type: 'Door knock', response: 'No answer' });
@@ -49,12 +54,16 @@ const seed = require('./seed');
   const nu = await tr.tenant('8645-7');
   assert.strictEqual(nu.status, 'No answer');
   assert.strictEqual(nu.row, 10);
+  assert.strictEqual((await tr.tenants()).length, 9);
   await tr.logInteraction({ building: '8645', unit: '7', canvasser: 'Ben K', type: 'Door knock', response: 'Talked', who: 'Sam' });
   assert.strictEqual((await tr.tenants()).length, 9);
+  // A new building typed at the door is added to the Lists tab.
+  await tr.logInteraction({ building: '9999', unit: '1', canvasser: 'Ben K', type: 'Door knock', response: 'Talked' });
+  assert.ok((await tr.lists()).buildings.includes('9999'));
 
   // Formula columns are never written: the key cell on the new row stays empty in the mock.
-  const raw = await store.getValues(`'${config.tabs.tenants}'!A10:AA10`);
-  assert.strictEqual((raw[0] || [])[26] || '', '', 'key column must be left to the sheet formula');
+  const raw = await store.getValues(`'${config.tabs.tenants}'!A10:AC10`);
+  assert.strictEqual((raw[0] || [])[28] || '', '', 'key column must be left to the sheet formula');
 
   // Edits respect editableFields.
   const ed = await tr.updateTenant('8645-7', { status: 'Supportive', grievanceTypes: ['Pests', 'Trash'], groupChat: true, name: 'Sam', lastContact: 'nope' });
