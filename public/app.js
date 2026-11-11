@@ -24,6 +24,17 @@
   let busyCount = 0;
   function busy(on) { busyCount = Math.max(0, busyCount + (on ? 1 : -1)); document.body.classList.toggle('busy', busyCount > 0); }
 
+  // A blocking overlay for waits the canvasser can't do anything during (opening a unit that
+  // isn't on the phone yet, saving). Shown only once a wait passes 150ms, so quick ones don't flash.
+  const $wait = document.getElementById('wait');
+  let waitTimer = null;
+  function wait(text) {
+    clearTimeout(waitTimer);
+    if (!text) { $wait.hidden = true; return; }
+    document.getElementById('waitText').textContent = text;
+    waitTimer = setTimeout(() => { $wait.hidden = false; }, 150);
+  }
+
   let toastTimer;
   function toast(msg) {
     $toast.textContent = msg; $toast.hidden = false;
@@ -412,12 +423,13 @@
       const name = (S.newName || '').trim();
       if (!name) { toast('Enter the new tenant\'s name.'); $app.querySelector('#newName').focus(); return; }
       if (!confirm(`Replace ${S.tenant.name || 'the current tenant'} with ${name}? Their phone, email and consents will be cleared.`)) return;
-      S.replacingBusy = true; render();
+      S.replacingBusy = true; render(); wait('Updating the unit…');
       try {
         const t = await api('/api/tenant/' + encodeURIComponent(S.tenant.key) + '/replace', { name });
         S.tenant = t; S.replacing = false; S.newName = ''; S.replacingBusy = false; S.form = blankForm(t); S.edit = null; S.editing = false;
         toast('Tenant replaced'); await refreshList(); render();
       } catch (e) { S.replacingBusy = false; render(); toast(e.message); }
+      finally { wait(null); }
     });
 
     // Choice buttons write straight into the form so re-rendering keeps state.
@@ -507,8 +519,10 @@
     on('#save', 'click', save);
     on('#saveEdit', 'click', saveEdit);
     $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', async () => {
+      wait('Updating…');
       try { await api(`/api/followup/${b.dataset.done}/done`, {}); toast('Follow-up marked done'); await openTenant(S.tenant.key, true); }
       catch (e) { toast(e.message); }
+      finally { wait(null); }
     }));
   }
 
@@ -529,7 +543,7 @@
       if (!keepForm) { S.form = blankForm(t); if (keepType) Object.assign(S.form, keepType); S.edit = null; S.editing = false; }
       render(); window.scrollTo(0, 0);
     };
-    if (local) { S.showAll = false; show(local); }
+    if (local) { S.showAll = false; show(local); } else wait(`Opening ${key}…`);
     busy(true);
     try {
       const t = await api('/api/tenant/' + encodeURIComponent(key));
@@ -540,7 +554,7 @@
         S.tenant = t; if (changed) render();
       }
     } catch (e) { if (!local) toast(e.message); }
-    finally { busy(false); }
+    finally { busy(false); wait(null); }
   }
 
   async function save() {
@@ -553,7 +567,7 @@
       if (p.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) { S.error = `${p.name.trim() || 'The other person'}'s email doesn't look right.`; break; }
     }
     if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
-    S.saving = true; render(); busy(true);
+    S.saving = true; render(); busy(true); wait('Saving…');
     try {
       const chosen = f.primary >= 0 && f.people[f.primary] && f.people[f.primary].name.trim() ? f.people[f.primary].name.trim() : '';
       const r = await api('/api/interaction', { ...f, people: f.people.filter((p) => p.name.trim()), makePrimary: chosen });
@@ -563,10 +577,11 @@
       await refreshList();
       go({ view: 'tenant', key: r.key }, { replace: true });
     } catch (e) { S.saving = false; S.error = e.message; render(); }
-    finally { busy(false); }
+    finally { busy(false); wait(null); }
   }
 
   async function saveEdit() {
+    wait('Saving details…');
     try {
       const payload = {};
       for (const [k, v] of Object.entries(S.edit)) if (S.editable.includes(k) && S.features[k]) payload[k] = v;
@@ -574,6 +589,7 @@
       S.tenant = t; S.edit = null; S.editing = false; toast('Details saved');
       await refreshList(); render();
     } catch (e) { toast(e.message); }
+    finally { wait(null); }
   }
 
   async function refreshList() {
