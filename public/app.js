@@ -79,6 +79,30 @@
   }
   const tenantFor = (building, unit) => S.tenants.find((t) => t.unit === (unit || '').trim() && (t.building || '') === (building || '').trim());
 
+  // ---- navigation (browser history aware) -------------------------------------
+  // Every screen change pushes a history entry, so the phone's back button and the
+  // in-app back button do the same thing.
+  function go(state, { replace = false, focus } = {}) {
+    const fn = replace ? 'replaceState' : 'pushState';
+    history[fn](state, '', state.view === 'list' ? '#' : '#' + state.view);
+    applyState(state, focus);
+  }
+  function applyState(state, focus) {
+    S.error = '';
+    if (state.view === 'list') { S.view = 'list'; S.tenant = null; S.edit = null; S.editing = false; S.from = null; render(); return; }
+    if (state.view === 'new') {
+      S.view = 'new'; S.tenant = null; S.from = null;
+      const f = blankForm(null);
+      if (state.building !== undefined) f.building = state.building;
+      if (state.unit !== undefined) f.unit = state.unit;
+      S.form = f; render(); window.scrollTo(0, 0);
+      if (focus) { const el = $app.querySelector('#' + focus); if (el) el.focus(); }
+      return;
+    }
+    if (state.view === 'tenant') { S.from = state.from || null; openTenant(state.key, false, state.keepType); }
+  }
+  window.addEventListener('popstate', (e) => { if (e.state) applyState(e.state, e.state.focus); else applyState({ view: 'list' }); });
+
   // ---- rendering ---------------------------------------------------------------
   function render() {
     if (S.view === 'list') $app.innerHTML = renderList();
@@ -124,7 +148,7 @@
     const due = t.history.find((x) => x.followUpDate && !x.done);
     return h`
       <div class="screen">
-        <div class="backrow"><button class="back" id="back">‹ All units</button><span class="who">Logging as ${esc(S.me)}</span></div>
+        <div class="backrow"><button class="back" id="back">${S.from && S.from.view === 'new' ? '‹ Back to new unit' : '‹ All units'}</button><span class="who">Logging as ${esc(S.me)}</span></div>
         <div class="head">
           ${plate(t, 'lg')}
           <div class="name">${esc(t.name) || '<em>No name yet</em>'}</div>
@@ -257,9 +281,9 @@
 
     on('#q', 'input', (e) => { S.q = e.target.value; const pos = e.target.selectionStart; render(); const q = $app.querySelector('#q'); q.focus(); q.setSelectionRange(pos, pos); });
     on('#onlyDue', 'click', () => { S.onlyDue = !S.onlyDue; render(); });
-    on('#newUnit', 'click', () => { S.view = 'new'; S.form = blankForm(null); S.error = ''; render(); window.scrollTo(0, 0); });
-    $app.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openTenant(b.dataset.open)));
-    on('#back', 'click', () => { S.view = 'list'; S.tenant = null; S.edit = null; S.editing = false; S.error = ''; render(); });
+    on('#newUnit', 'click', () => go({ view: 'new' }));
+    $app.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => go({ view: 'tenant', key: b.dataset.open })));
+    on('#back', 'click', () => history.back());
     on('#showAll', 'click', () => { S.showAll = true; render(); });
     on('#editDetails', 'toggle', (e) => { S.editing = e.target.open; });
 
@@ -302,7 +326,12 @@
         e.preventDefault(); input.value = li.dataset.val; S.form[field] = li.dataset.val; list.hidden = true;
         // Picking a person or a unit that already exists means "add a conversation there", not a new row.
         const existing = li.dataset.key ? S.tenants.find((t) => t.key === li.dataset.key) : null;
-        if (existing && S.view === 'new') { const keep = { type: S.form.type }; openTenant(existing.key).then(() => { S.form.type = keep.type; render(); }); return; }
+        if (existing && S.view === 'new') {
+          // Leave the new-unit screen in history with building and unit, name cleared and focused, for a mis-tap.
+          history.replaceState({ view: 'new', building: S.form.building, unit: field === 'who' ? S.form.unit : '', focus: 'who' }, '', '#new');
+          go({ view: 'tenant', key: existing.key, from: { view: 'new' }, keepType: S.form.type });
+          return;
+        }
         if (field === 'building') { const u = $app.querySelector('[data-combo="unit"]'); if (u) u.focus(); }
       });
     });
@@ -330,11 +359,11 @@
     }));
   }
 
-  async function openTenant(key, keepForm) {
+  async function openTenant(key, keepForm, keepType) {
     try {
       const t = await api('/api/tenant/' + encodeURIComponent(key));
       S.tenant = t; S.view = 'tenant'; S.showAll = false; S.error = '';
-      if (!keepForm) { S.form = blankForm(t); S.edit = null; S.editing = false; }
+      if (!keepForm) { S.form = blankForm(t); if (keepType) S.form.type = keepType; S.edit = null; S.editing = false; }
       render(); window.scrollTo(0, 0);
     } catch (e) { toast(e.message); }
   }
@@ -353,7 +382,7 @@
       S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');
       await refreshList();
-      await openTenant(r.key);
+      go({ view: 'tenant', key: r.key }, { replace: true });
     } catch (e) { S.saving = false; S.error = e.message; render(); }
   }
 
@@ -376,7 +405,7 @@
   }
 
   (async () => {
-    try { await refreshList(); render(); }
+    try { await refreshList(); go({ view: 'list' }, { replace: true }); }
     catch (e) { $app.innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
   })();
 })();
