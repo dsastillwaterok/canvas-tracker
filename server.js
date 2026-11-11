@@ -46,7 +46,9 @@ async function boot() {
     console.log(`Sheet layout OK (${config.appName}, settings from ${fromSheet ? 'the sheet' : 'config/default.json'}).` + (missing.length ? ` Optional columns not present: ${missing.join(', ')}` : ''));
   } catch (e) {
     ctx.config = config; ctx.configured = false; ctx.lastError = e.message;
-    console.log(`Not configured yet: ${e.message}\nOpen /admin?key=ADMIN_KEY to run setup.`);
+    console.log(`Not configured yet: ${e.message}\nOpen /admin?key=ADMIN_KEY to run setup. Retrying every 30 seconds.`);
+    // A sheet share or an API enable can land after startup; keep trying rather than needing a redeploy.
+    setTimeout(() => boot().catch(() => {}), 30 * 1000).unref();
   }
 }
 
