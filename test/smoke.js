@@ -107,12 +107,13 @@ const seed = require('./seed');
   mapped.columns.tenants = { name: 'Resident Name', phone: 'Phone #', unit: 'Apt', building: 'Bldg', status: 'Call Status', grievances: 'Main Concern(s)', notes: 'Notes' };
   mapped.columns.interactions = { date: 'Date', unit: 'Apt', building: 'Bldg', canvasser: 'Caller', type: 'Method', response: 'Outcome', discussed: 'Summary', followUp: 'Next step' };
   mapped.columns.lists = { statuses: 'Call Status', types: 'Method', responses: 'Outcome', canvassers: 'Callers' };
-  mapped.extraFields = [{ header: 'Documentation available?', label: 'Documentation?', kind: 'text' }];
+  mapped.form.fields.push({ id: 'h:Documentation available?', kind: 'text', label: 'Documentation?', required: true });
   const s2 = new Schema(theirs, mapped);
   const tr2 = new Tracker(theirs, s2);
   const f2 = await s2.features();
   assert.strictEqual(f2.housing, false);
   assert.strictEqual((await tr2.tenants())[0].key, '100-3');
+  await assert.rejects(tr2.logInteraction({ building: '100', unit: '3', canvasser: 'Ana', type: 'Phone', response: 'Talked' }), /Documentation\? is required/);
   await tr2.logInteraction({ building: '100', unit: '3', canvasser: 'Ana', type: 'Phone', response: 'Talked', discussed: 'again', extra: { 'Documentation available?': 'video' } });
   const log = await theirs.getValues("'Call log'!A3:I3");
   assert.strictEqual(log[0][8], 'video');
@@ -134,6 +135,25 @@ const seed = require('./seed');
   const back = await setup.readSheetConfig(blank);
   assert.strictEqual(back.appName, config.appName);
   assert.strictEqual(await setup.readSheetConfig(new MockStore({ Sheet1: [] })), null);
+
+  // ---- the door form definition ------------------------------------------------
+  const formLib = require('../lib/form');
+  const legacy = formLib.formSpec({ formFields: ['who', 'phone'], extraFields: [{ header: 'Photo?', kind: 'textarea' }] });
+  assert.deepStrictEqual(legacy.map((f) => f.id), ['type', 'response', 'who', 'phone', 'h:Photo?'], 'older configs migrate, required questions stay');
+  assert.strictEqual(legacy[4].kind, 'textarea');
+  const spec = formLib.formSpec(config);
+  assert.strictEqual(formLib.validate(spec, { type: 'Text', response: 'Talked' }, lists), null);
+  assert.match(formLib.validate(spec, { type: '', response: 'Talked' }, lists), /Pick how/);
+  assert.match(formLib.validate(spec, { type: 'Carrier pigeon', response: 'Talked' }, lists), /isn't one of the choices/);
+  assert.match(formLib.validate(spec, { type: 'Text', response: 'Talked', followUpDate: 'soon' }, lists), /needs a date/);
+  assert.match(formLib.validate(spec, { type: 'Text', response: 'Talked', grievanceTypes: ['Dragons'] }, lists), /Dragons/);
+  const strict = [formLib.normalizeField({ id: 'h:Unit size', kind: 'number', label: 'Unit size' }), formLib.normalizeField({ id: 'who', kind: 'text', pattern: '^[A-Z]', patternHint: 'Capitalize the name.' })];
+  assert.match(formLib.validate(strict, { 'h:Unit size': 'big' }), /needs a number/);
+  assert.match(formLib.validate(strict, { who: 'bob' }), /Capitalize/);
+  assert.strictEqual(formLib.validate(strict, { 'h:Unit size': '2', who: 'Bob' }), null);
+  assert.strictEqual(formLib.normalizeField({ id: 'x', kind: 'text', pattern: '(' }).pattern, '', 'a broken pattern is dropped, not fatal');
+  const avail = formLib.availableFields(spec, { interactions: await schema.tab('interactions'), tenants: await schema.tab('tenants') });
+  assert.strictEqual(avail.length, spec.length, 'the default sheet has every default question');
 
   // ---- keys and auth -------------------------------------------------------------
   assert.strictEqual(makeKey('8659', 'TBD-Carol'), '8659-TBD-Carol');

@@ -61,9 +61,9 @@
       "canvassers": "Canvassers",
       "canvasserEmails": "Canvasser email",
       "linkSent": "Link sent",
+      "links": "Personal form link",
       "stay": "Planning to stay",
       "grievanceTypes": "Grievance type",
-      "links": "Personal form link",
       "buildings": "Building"
     }
   },
@@ -111,18 +111,6 @@
     "connected",
     "notes"
   ],
-  "formFields": [
-    "who",
-    "discussed",
-    "followUp",
-    "followUpDate",
-    "phone",
-    "email",
-    "okPhone",
-    "okEmail",
-    "grievanceTypes"
-  ],
-  "extraFields": [],
   "newUnitStatus": {
     "whenResponseIs": {
       "No answer": "No answer"
@@ -264,5 +252,91 @@
     "buildings": []
   },
   "sessionDays": 3,
-  "linkMessage": "Hi {name}, here is your link for the {appName} canvass app:\n\n{link}\n\nIt signs you in as you through {until}, then stops working; you'll get a fresh one before each canvass. Open it on your phone and use Share > Add to Home Screen so the app is one tap away. Please don't forward it. Reply here with any questions."
+  "linkMessage": "Hi {name}, here is your link for the {appName} canvass app:\n\n{link}\n\nIt signs you in as you through {until}, then stops working; you'll get a fresh one before each canvass. Open it on your phone and use Share > Add to Home Screen so the app is one tap away. Please don't forward it. Reply here with any questions.",
+  "form": {
+    "fields": [
+      {
+        "id": "type",
+        "kind": "choice",
+        "list": "types",
+        "label": "How",
+        "hint": "stays set for your next one",
+        "required": true,
+        "sticky": true
+      },
+      {
+        "id": "response",
+        "kind": "choice",
+        "list": "responses",
+        "label": "What happened",
+        "required": true
+      },
+      {
+        "id": "who",
+        "kind": "text",
+        "label": "Who you talked to",
+        "hint": "leave blank if it was the tenant or nobody answered"
+      },
+      {
+        "id": "discussed",
+        "kind": "textarea",
+        "label": "What was discussed",
+        "placeholder": "Grievances, how they feel about the union, anything worth remembering"
+      },
+      {
+        "id": "grievanceTypes",
+        "target": "tenant",
+        "kind": "tags",
+        "list": "grievanceTypes",
+        "grouped": true,
+        "label": "Grievances they raised",
+        "hint": "tap all that apply"
+      },
+      {
+        "id": "phone",
+        "target": "tenant",
+        "kind": "tel",
+        "label": "Phone",
+        "row": "contact",
+        "section": "Contact info",
+        "sectionHint": "if they gave it. Tick the box only if they said we may use it."
+      },
+      {
+        "id": "okPhone",
+        "target": "tenant",
+        "kind": "checkbox",
+        "label": "OK to call or text",
+        "under": true,
+        "onlyOn": true
+      },
+      {
+        "id": "email",
+        "target": "tenant",
+        "kind": "email",
+        "label": "Email",
+        "row": "contact"
+      },
+      {
+        "id": "okEmail",
+        "target": "tenant",
+        "kind": "checkbox",
+        "label": "OK to email",
+        "under": true,
+        "onlyOn": true
+      },
+      {
+        "id": "followUp",
+        "kind": "text",
+        "label": "Follow-up needed",
+        "placeholder": "e.g. bring a flyer",
+        "row": "follow"
+      },
+      {
+        "id": "followUpDate",
+        "kind": "date",
+        "label": "By when",
+        "row": "follow"
+      }
+    ]
+  }
 }

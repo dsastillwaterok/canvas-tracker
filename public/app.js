@@ -3,7 +3,7 @@
   const $toast = document.getElementById('toast');
 
   const S = {
-    me: '', appName: '', lists: null, tenants: [], features: {}, interactionFields: {}, formFields: [], extraFields: [], editable: [],
+    me: '', appName: '', lists: null, tenants: [], features: {}, formSpec: [], tagGroups: [], editable: [],
     view: 'list', q: '', onlyDue: false,
     tenant: null, showAll: false, editing: false,
     form: null, saving: false, error: '',
@@ -47,27 +47,45 @@
     get() { try { return JSON.parse(localStorage.getItem('canvass.sticky') || '{}'); } catch { return {}; } },
     set(v) { try { localStorage.setItem('canvass.sticky', JSON.stringify(v)); } catch { /* private mode */ } },
   };
+  // A fresh form: sticky answers carried over, tenant-row answers pre-filled from the tenant.
   function blankForm(t) {
     const st = sticky.get();
-    return {
-      building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '',
-      type: st.type || '', response: '', discussed: '', followUp: '', followUpDate: '', phone: '', email: '', okPhone: false, okEmail: false, grievanceTypes: t ? (t.grievanceTypes || []).slice() : [], extra: {},
-    };
+    const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '' };
+    for (const q of S.formSpec) {
+      let v = q.kind === 'tags' ? [] : q.kind === 'checkbox' ? false : '';
+      if (q.sticky && st.values && q.id in st.values) v = st.values[q.id];
+      if (q.target === 'tenant' && t && q.id in t && !/^h:/.test(q.id)) v = q.kind === 'tags' ? (t[q.id] || []).slice() : q.kind === 'checkbox' ? !!t[q.id] : (t[q.id] || '');
+      f[q.id] = v;
+    }
+    return f;
   }
-  const show = (f) => S.formFields.includes(f) && (['phone', 'email', 'okPhone', 'okEmail', 'grievanceTypes'].includes(f) ? S.features[f] : S.interactionFields[f]);
+  function validateForm(f) {
+    for (const q of S.formSpec) {
+      const v = f[q.id];
+      const empty = q.kind === 'tags' ? !(v && v.length) : q.kind === 'checkbox' ? false : !String(v || '').trim();
+      if (q.required && empty) return (q.kind === 'choice' || q.kind === 'select') ? `Pick ${q.label.toLowerCase()}.` : q.kind === 'tags' ? `Pick at least one under ${q.label}.` : `${q.label} is required.`;
+      if (empty) continue;
+      const s = String(v).trim();
+      if (q.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return `${q.label} doesn't look like an email address.`;
+      if (q.kind === 'number' && !/^-?\d+(\.\d+)?$/.test(s)) return `${q.label} needs a number.`;
+      if (q.pattern && !['checkbox', 'tags'].includes(q.kind)) { try { if (!new RegExp(q.pattern).test(s)) return q.patternHint || `${q.label} isn't in the expected format.`; } catch { /* bad pattern: server decides */ } }
+    }
+    return null;
+  }
+  const stickyValues = (f) => Object.fromEntries(S.formSpec.filter((q) => q.sticky).map((q) => [q.id, f[q.id]]));
   const hasB = () => S.features.building;
 
   // Tags grouped by theme (config.tagGroups), in the group's order; anything ungrouped goes last.
-  function tagGroups() {
-    const all = S.lists.grievanceTypes || [];
+  function tagGroups(all, grouped) {
+    if (!grouped) return [{ label: '', tags: all }];
     const groups = (S.tagGroups || []).map((g) => ({ label: g.label, tags: (g.tags || []).filter((t) => all.includes(t)) })).filter((g) => g.tags.length);
     const placed = new Set(groups.flatMap((g) => g.tags));
     const rest = all.filter((t) => !placed.has(t));
     if (rest.length) groups.push({ label: groups.length ? 'Other' : '', tags: rest });
     return groups;
   }
-  function tagPicker(attr, selected) {
-    return tagGroups().map((g) => h`<div class="tag-group">${g.label ? h`<span class="tag-group-label">${esc(g.label)}</span>` : ''}
+  function tagPicker(attr, selected, all = S.lists.grievanceTypes || [], grouped = true) {
+    return tagGroups(all, grouped).map((g) => h`<div class="tag-group">${g.label ? h`<span class="tag-group-label">${esc(g.label)}</span>` : ''}
       <div class="choices tags" ${attr}>${g.tags.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${selected.includes(v)}">${esc(v)}</button>`).join('')}</div></div>`).join('');
   }
 
@@ -229,37 +247,58 @@
       <div class="fab-wrap"><button class="btn primary block" id="save" ${S.saving ? 'disabled' : ''}>${S.saving ? 'Saving…' : 'Save new unit and conversation'}</button></div>`;
   }
 
+  const choicesFor = (q) => (q.options && q.options.length ? q.options : (q.list && S.lists[q.list]) || []);
+
+  // One question. `nested` means it sits inside the previous question's box.
+  function renderQuestion(q, f) {
+    const id = 'f_' + q.id.replace(/[^a-z0-9]/gi, '_');
+    const lbl = (tag) => h`<${tag} class="${tag === 'label' ? '' : 'lbl'}" ${tag === 'label' ? `for="${id}"` : ''}>${esc(q.label)}${q.hint ? h` <span class="hint">${esc(q.hint)}</span>` : ''}</${tag}>`;
+    const v = f[q.id];
+    const attrs = `id="${id}" data-q="${esc(q.id)}" ${q.placeholder ? `placeholder="${esc(q.placeholder)}"` : ''}`;
+    switch (q.kind) {
+      case 'choice': return h`${lbl('span')}<div class="choices" data-choice="${esc(q.id)}">${choicesFor(q).map((c) => h`<button type="button" data-val="${esc(c)}" aria-pressed="${v === c}">${esc(c)}</button>`).join('')}</div>`;
+      case 'select': return h`${lbl('label')}<select class="text" ${attrs}><option value="">${q.required ? 'Choose one' : 'None'}</option>${choicesFor(q).map((c) => h`<option ${v === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
+      case 'tags': return h`${lbl('span')}${tagPicker(`data-ftags="${esc(q.id)}"`, v || [], choicesFor(q), q.grouped)}`;
+      case 'checkbox': return h`<label class="toggle"><input type="checkbox" data-q="${esc(q.id)}" ${v ? 'checked' : ''}> ${esc(q.label)}${q.hint ? h` <span class="hint">${esc(q.hint)}</span>` : ''}</label>`;
+      case 'textarea': return h`${lbl('label')}<textarea class="textarea" ${attrs}>${esc(v)}</textarea>`;
+      case 'date': return h`${lbl('label')}<input class="text" type="date" ${attrs} value="${esc(v)}">`;
+      case 'number': return h`${lbl('label')}<input class="text" type="text" inputmode="decimal" ${attrs} value="${esc(v)}">`;
+      case 'tel': return h`${lbl('label')}<input class="text" type="tel" ${attrs} value="${esc(v)}">`;
+      case 'email': return h`${lbl('label')}<input class="text" type="email" autocapitalize="off" ${attrs} value="${esc(v)}">`;
+      default: return h`${lbl('label')}<input class="text" type="text" autocomplete="off" ${attrs} value="${esc(v)}">`;
+    }
+  }
+
+  // Lay the questions out: section headings, side-by-side rows, and boxes with a checkbox tucked under a field.
   function renderLogForm(opts = {}) {
     const f = S.form;
-    const choice = (name, values) => h`<div class="choices" data-choice="${name}">
-      ${values.map((v) => h`<button type="button" data-val="${esc(v)}" aria-pressed="${f[name] === v}">${esc(v)}</button>`).join('')}</div>`;
-    return h`
-      <div class="field"><span class="lbl">How <span class="hint">stays set for your next one</span></span>${choice('type', S.lists.types)}</div>
-      <div class="field"><span class="lbl">What happened</span>${choice('response', S.lists.responses)}</div>
-      ${opts.skipWho || !show('who') ? '' : h`<div class="field"><label for="who">Who you talked to <span class="hint">leave blank if it was ${esc(S.tenant && S.tenant.name ? S.tenant.name : 'the tenant')} or nobody answered</span></label>
-        <input class="text" id="who" autocomplete="off" value="${esc(f.who)}"></div>`}
-      ${show('discussed') ? h`<div class="field"><label for="discussed">What was discussed</label>
-        <textarea class="textarea" id="discussed" placeholder="Grievances, how they feel about the union, anything worth remembering">${esc(f.discussed)}</textarea></div>` : ''}
-      ${show('grievanceTypes') ? h`<div class="field"><span class="lbl">Grievances they raised <span class="hint">${(S.tenant && (S.tenant.grievanceTypes || []).length) ? 'already on file are filled in; tap to add or clear' : 'tap all that apply'}</span></span>
-        ${tagPicker('data-ftags="grievanceTypes"', f.grievanceTypes)}</div>` : ''}
-      ${S.extraFields.map((x) => h`<div class="field"><label for="x_${esc(x.header)}">${esc(x.label || x.header)}</label>
-        ${x.kind === 'textarea' ? h`<textarea class="textarea" data-extra="${esc(x.header)}">${esc(f.extra[x.header] || '')}</textarea>` : h`<input class="text" data-extra="${esc(x.header)}" value="${esc(f.extra[x.header] || '')}">`}</div>`).join('')}
-      ${show('phone') || show('email') || show('okPhone') || show('okEmail') ? h`<div class="field"><span class="lbl">Contact info <span class="hint">if they gave it. Tick the box only if they said we may use it.</span></span>
-        <div class="contact-pair">
-          ${show('phone') || show('okPhone') ? h`<div class="contact">
-            ${show('phone') ? h`<label for="phone">Phone</label><input class="text" id="phone" type="tel" value="${esc(f.phone)}">` : ''}
-            ${show('okPhone') ? h`<label class="toggle"><input type="checkbox" id="okPhone" ${f.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
-          </div>` : ''}
-          ${show('email') || show('okEmail') ? h`<div class="contact">
-            ${show('email') ? h`<label for="email">Email</label><input class="text" id="email" type="email" value="${esc(f.email)}">` : ''}
-            ${show('okEmail') ? h`<label class="toggle"><input type="checkbox" id="okEmail" ${f.okEmail ? 'checked' : ''}> OK to email</label>` : ''}
-          </div>` : ''}
-        </div></div>` : ''}
-      ${show('followUp') || show('followUpDate') ? h`<div class="field two">
-        ${show('followUp') ? h`<div><label for="followUp">Follow-up needed</label><input class="text" id="followUp" value="${esc(f.followUp)}" placeholder="e.g. bring a flyer"></div>` : ''}
-        ${show('followUpDate') ? h`<div><label for="followUpDate">By when</label><input class="text" id="followUpDate" type="date" value="${esc(f.followUpDate)}"></div>` : ''}
-      </div>` : ''}
-      ${S.error ? h`<p class="err">${esc(S.error)}</p>` : ''}`;
+    const spec = S.formSpec.filter((q) => !(opts.skipWho && q.id === 'who'));
+    // Group: a question plus any `under` questions that follow it.
+    const units = [];
+    for (const q of spec) {
+      if (q.under && units.length) units[units.length - 1].under.push(q);
+      else units.push({ q, under: [] });
+    }
+    // Then rows: consecutive units whose lead question shares a row name.
+    const blocks = [];
+    for (const u of units) {
+      const last = blocks[blocks.length - 1];
+      if (u.q.row && last && last.row === u.q.row) last.units.push(u);
+      else blocks.push({ row: u.q.row, units: [u] });
+    }
+    const unitHtml = (u) => {
+      const boxed = u.under.length > 0;
+      const inner = renderQuestion(u.q, f) + u.under.map((x) => renderQuestion(x, f)).join('');
+      return boxed ? h`<div class="contact">${inner}</div>` : h`<div>${inner}</div>`;
+    };
+    let out = '';
+    for (const b of blocks) {
+      const lead = b.units[0].q;
+      const section = lead.section ? h`<span class="lbl">${esc(lead.section)}${lead.sectionHint ? h` <span class="hint">${esc(lead.sectionHint)}</span>` : ''}</span>` : '';
+      if (b.units.length > 1) out += h`<div class="field">${section}<div class="${b.units.some((u) => u.under.length) ? 'contact-pair' : 'two'}">${b.units.map(unitHtml).join('')}</div></div>`;
+      else out += h`<div class="field">${section}${b.units[0].under.length ? h`<div class="contact-pair">${unitHtml(b.units[0])}</div>` : unitHtml(b.units[0]).replace(/^<div>|<\/div>$/g, '')}</div>`;
+    }
+    return out + (S.error ? h`<p class="err">${esc(S.error)}</p>` : '');
   }
 
   function renderEdit(t) {
@@ -339,7 +378,10 @@
         b.setAttribute('aria-pressed', i === -1);
       }));
     });
-    ['who', 'discussed', 'followUp', 'followUpDate', 'phone', 'email'].forEach((id) => on('#' + id, 'input', (e) => { S.form[id] = e.target.value; }));
+    $app.querySelectorAll('[data-q]').forEach((el) => {
+      if (el.type === 'checkbox') el.addEventListener('change', () => { S.form[el.dataset.q] = el.checked; });
+      else el.addEventListener('input', () => { S.form[el.dataset.q] = el.value; });
+    });
     $app.querySelectorAll('[data-combo]').forEach((input) => {
       const field = input.dataset.combo;
       const list = input.nextElementSibling;
@@ -360,7 +402,7 @@
         if (existing && S.view === 'new') {
           // Leave the new-unit screen in history with building and unit, name cleared and focused, for a mis-tap.
           history.replaceState({ view: 'new', building: S.form.building, unit: field === 'who' ? S.form.unit : '', focus: 'who' }, '', '#new');
-          go({ view: 'tenant', key: existing.key, from: { view: 'new' }, keepType: S.form.type });
+          go({ view: 'tenant', key: existing.key, from: { view: 'new' }, keepType: stickyValues(S.form) });
           return;
         }
         if (field === 'building') { const u = $app.querySelector('[data-combo="unit"]'); if (u) u.focus(); }
@@ -374,9 +416,6 @@
     on('#e_griev', 'input', (e) => { S.edit.grievances = e.target.value; });
     on('#e_conn', 'input', (e) => { S.edit.connected = e.target.value; });
     on('#e_res', 'input', (e) => { S.edit.residents = e.target.value; });
-    $app.querySelectorAll('[data-extra]').forEach((el) => el.addEventListener('input', (e) => { S.form.extra[el.dataset.extra] = e.target.value; }));
-    on('#okPhone', 'change', (e) => { S.form.okPhone = e.target.checked; });
-    on('#okEmail', 'change', (e) => { S.form.okEmail = e.target.checked; });
     on('#e_okPhone', 'change', (e) => { S.edit.okPhone = e.target.checked; });
     on('#e_okEmail', 'change', (e) => { S.edit.okEmail = e.target.checked; });
     on('#e_groupChat', 'change', (e) => { S.edit.groupChat = e.target.checked; });
@@ -394,7 +433,7 @@
     try {
       const t = await api('/api/tenant/' + encodeURIComponent(key));
       S.tenant = t; S.view = 'tenant'; S.showAll = false; S.error = '';
-      if (!keepForm) { S.form = blankForm(t); if (keepType) S.form.type = keepType; S.edit = null; S.editing = false; }
+      if (!keepForm) { S.form = blankForm(t); if (keepType) Object.assign(S.form, keepType); S.edit = null; S.editing = false; }
       render(); window.scrollTo(0, 0);
     } catch (e) { toast(e.message); }
   }
@@ -403,13 +442,12 @@
     const f = S.form;
     S.error = '';
     if (S.view === 'new' && !f.unit.trim()) S.error = 'Enter the apartment number.';
-    else if (!f.type) S.error = 'Pick how you reached them.';
-    else if (!f.response) S.error = 'Pick what happened.';
+    else S.error = validateForm(f) || '';
     if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
     S.saving = true; render();
     try {
       const r = await api('/api/interaction', f);
-      sticky.set({ type: f.type, building: f.building });
+      sticky.set({ building: f.building, values: stickyValues(f) });
       S.saving = false; render();
       toast(r.created ? 'Saved. New unit added.' : 'Saved');
       await refreshList();
@@ -430,8 +468,7 @@
   async function refreshList() {
     const b = await api('/api/bootstrap');
     S.me = b.me; S.appName = b.appName; S.lists = b.lists; S.tenants = b.tenants;
-    S.features = b.features || {}; S.interactionFields = b.interactionFields || {};
-    S.formFields = b.formFields || []; S.extraFields = b.extraFields || []; S.tagGroups = b.tagGroups || []; S.editable = b.editable || [];
+    S.features = b.features || {}; S.formSpec = b.form || []; S.tagGroups = b.tagGroups || []; S.editable = b.editable || [];
     document.title = `${S.appName} canvass`;
   }
 

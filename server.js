@@ -7,6 +7,7 @@ const { Tracker } = require('./lib/tracker');
 const setup = require('./lib/setup');
 const admin = require('./lib/admin');
 const auth = require('./lib/auth');
+const form = require('./lib/form');
 const { mailer } = require('./lib/mail');
 
 const PORT = process.env.PORT || 3000;
@@ -41,7 +42,7 @@ async function boot() {
   const fromSheet = await setup.readSheetConfig(store);
   const config = fromSheet || loadConfig();
   // Until an organizer picks the door-form questions in the wizard, follow the defaults as they grow.
-  if (!config.formFieldsChosen) config.formFields = [...new Set([...(config.formFields || []), ...loadConfig().formFields])];
+  if (!config.form && !config.formFieldsChosen) config.formFields = [...new Set([...(config.formFields || []), ...form.DEFAULT_FIELDS.map((f) => f.id)])];
   try {
     await ctx.applyConfig(config);
     const f = await ctx.schema.features();
@@ -209,13 +210,12 @@ app.get('/api/bootstrap', requireCanvasser, async (req, res, next) => {
   try {
     const [lists, tenants, features] = await Promise.all([ctx.tracker.lists(), ctx.tracker.tenants(), ctx.schema.features()]);
     const icols = await ctx.schema.tab('interactions');
+    const tcols = await ctx.schema.tab('tenants');
     res.json({
       me: req.canvasser,
       appName: ctx.config.appName,
       features,
-      interactionFields: Object.fromEntries(Object.keys(ctx.config.columns.interactions).map((f) => [f, icols[f] !== -1])),
-      formFields: ctx.config.formFields || ['who', 'discussed', 'followUp', 'followUpDate', 'phone', 'email'],
-      extraFields: ctx.config.extraFields || [],
+      form: form.availableFields(form.formSpec(ctx.config), { interactions: icols, tenants: tcols }),
       tagGroups: ctx.config.tagGroups || [],
       editable: ctx.config.editableFields || [],
       lists,
@@ -237,6 +237,9 @@ app.get('/api/tenant/:key', requireCanvasser, async (req, res, next) => {
 
 app.post('/api/interaction', requireCanvasser, async (req, res, next) => {
   try {
+    const spec = form.availableFields(form.formSpec(ctx.config), { interactions: await ctx.schema.tab('interactions'), tenants: await ctx.schema.tab('tenants') });
+    const problem = form.validate(spec, req.body || {}, await ctx.tracker.lists());
+    if (problem) return res.status(400).json({ error: problem });
     const result = await ctx.tracker.logInteraction({ ...req.body, canvasser: req.canvasser });
     res.json({ ...result, tenant: await ctx.tracker.tenant(result.key) });
   } catch (e) {

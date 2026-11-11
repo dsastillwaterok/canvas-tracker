@@ -16,7 +16,7 @@ No Google sign-in and no passwords. Before each canvass an organizer shows a QR 
 ## What organizers get
 
 - The sheet, exactly as before. The app adds rows and edits cells; formulas, filters and the Dashboard keep working.
-- `/admin`: a setup wizard, the sign-in QR code for the current canvass, a link per person for anyone who can't scan, and an overview of which fields are in use.
+- `/admin`: a setup wizard, a door-form builder (questions, order, wording, kinds, validation), the sign-in QR code for the current canvass, a link per person for anyone who can't scan, and an overview of which fields are in use.
 - Settings stored in a hidden tab inside the sheet, so they move with the data if the sheet changes hands.
 
 ## Set it up
@@ -63,8 +63,10 @@ Open `https://your-domain/healthz`. `{"ok":true,"configured":false}` means it's 
 
 Open `https://your-domain/admin?key=YOUR_ADMIN_KEY`.
 
-- **Use my existing sheet**: the wizard reads every tab and header, guesses which tab holds tenants, which holds conversations, and which holds dropdown lists, and guesses each column. Correct anything it got wrong, pick which fields appear on the door form, add any extra columns as questions, save. Required columns are: unit, name and status for tenants; date, unit, canvasser, how and what happened for conversations; canvasser names, how, what happened and statuses on a lists tab. Everything else is optional and simply doesn't appear if it's missing.
+- **Use my existing sheet**: the wizard reads every tab and header, guesses which tab holds tenants, which holds conversations, and which holds dropdown lists, and guesses each column. Correct anything it got wrong and save. Required columns are: unit, name and status for tenants; date, unit, canvasser, how and what happened for conversations; canvasser names, how, what happened and statuses on a lists tab. Everything else is optional and simply doesn't appear if it's missing.
 - **Build a new tracker**: name the campaign, say whether units sit inside numbered buildings, tick the fields you want, edit the dropdown choices, list your canvassers. It creates `Tenants`, `Interactions`, `Lists` and `Dashboard` tabs with headers, dropdowns, checkboxes, and the formulas that link conversations to tenants (last contact, last response, contact status).
+
+**The door form.** After setup, **Door form** in `/admin` lists every question canvassers answer. For each: the column it writes (a conversation column, or a tenant column that is pre-filled from the tenant's row and saved back), its kind (short or long text, phone, email, date, number, checkbox, pick one as buttons or a dropdown, pick many as chips), label, hint and placeholder, whether it's required, a pattern the answer must match with the message to show when it doesn't, whether the answer stays filled for the next conversation, and layout (a section heading, side-by-side rows, a checkbox tucked under the field above it, chips grouped by theme). Any column on either tab can become a question. The server checks every answer against the same rules, so the sheet only ever receives what the form allows.
 
 If the sheet already matches the default layout (the Woodland Manor one, headers in `config/default.json`), the app configures itself on first start and the wizard is only needed to change things.
 
@@ -112,10 +114,8 @@ The key that links a conversation to a tenant is `building-unit` (`8659-4`) or j
 - `columns.<tab>`: `{ field: "Header text" }`. Remove a field to tell the app the sheet doesn't have it.
 - `checkboxFields`, `formulaFields`: which fields are checkboxes (read/written as TRUE/FALSE) and which are formulas (never written)
 - `editableFields`: tenant fields organizers may change from the phone
-- `formFields`: which optional questions the door form shows (`who`, `discussed`, `followUp`, `followUpDate`, `phone`, `email`)
-- `extraFields`: `[{ "header": "Documentation available?", "label": "Documentation?", "kind": "text" | "textarea" }]`, extra questions written to the conversations tab by header
-- `sessionDays`: how long a canvass's sign-in lasts by default (1 to 7). `event` and `joinNotBefore` are written by the This canvass page.
-- `linkMessage`: the text sent with a personal link; placeholders `{name}`, `{appName}`, `{link}`, `{until}`
+- `form.fields`: the door form, one entry per question, in order. Each has `id` (a column key from `columns`, with `target: "tenant"` for a tenant-row column, or `h:Header text` for any other column), `kind` (`text`, `textarea`, `tel`, `email`, `date`, `number`, `checkbox`, `choice`, `select`, `tags`), `label`, `hint`, `placeholder`, `required`, `pattern` + `patternHint`, `sticky` (keep the answer for the next conversation), `list` or `options` for choices, `grouped` (chips by `tagGroups`), `onlyOn` (a tenant checkbox the form can set but never clear), and layout: `section` / `sectionHint`, `row` (questions sharing a row name sit side by side), `under` (inside the previous question's box). The **Door form** page in `/admin` edits all of this; older configs with `formFields` / `extraFields` are read as before.
+- `tagGroups`: `[{ "label": "Inside the unit", "tags": [...] }]`, how pick-many chips are grouped; tags not in any group appear under "Other"
 - `newUnitStatus`: status given to a tenant row created from a conversation, by response
 - `contactStatus`: stale window, dead-end statuses, and label text used by the built formula
 - `tagGroups`: `[{ "label": "Inside the unit", "tags": [...] }]`, how grievance tags are grouped on the phone; tags not in any group appear under "Other"

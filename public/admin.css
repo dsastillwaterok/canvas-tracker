@@ -57,3 +57,14 @@ form.inline select { display: inline-block; width: auto; margin: 0 6px; }
 .event .event-text p { margin: 0 0 10px; }
 .event input.mono { width: 100%; }
 @media (max-width: 600px) { .event { flex-direction: column; } .event .qr { width: min(100%, 260px); flex-basis: auto; } }
+
+/* Door form builder */
+fieldset.q { border: 1px solid var(--line); }
+fieldset.q legend { font-size: 15px; }
+.qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.qgrid label { margin-top: 8px; font-size: 14px; }
+.qgrid label .muted { font-weight: 400; }
+.qflags { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.qflags label.check { font-size: 14px; }
+.qflags label.check input[type=text], .qflags label.check input:not([type]) { display: inline-block; width: auto; margin-left: 6px; }
+@media (max-width: 640px) { .qgrid, .qflags { grid-template-columns: 1fr; } }
