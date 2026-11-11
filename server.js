@@ -215,7 +215,7 @@ app.get('/healthz', (req, res) => res.json({ ok: true, configured: ctx.configure
 
 app.get('/api/bootstrap', requireCanvasser, async (req, res, next) => {
   try {
-    const [lists, tenants, features] = await Promise.all([ctx.tracker.lists(), ctx.tracker.tenants(), ctx.schema.features()]);
+    const [lists, tenants, features, interactions, people] = await Promise.all([ctx.tracker.lists(), ctx.tracker.tenants(), ctx.schema.features(), ctx.tracker.interactions(), ctx.tracker.people()]);
     const icols = await ctx.schema.tab('interactions');
     const tcols = await ctx.schema.tab('tenants');
     res.json({
@@ -226,10 +226,10 @@ app.get('/api/bootstrap', requireCanvasser, async (req, res, next) => {
       tagGroups: ctx.config.tagGroups || [],
       editable: ctx.config.editableFields || [],
       lists,
-      tenants: tenants.map((t) => ({
-        key: t.key, building: t.building, unit: t.unit, name: t.name, status: t.status,
-        contactStatus: t.contactStatus, lastContact: t.lastContact, lastResponse: t.lastResponse, grievanceTypes: t.grievanceTypes,
-      })),
+      // Whole rows, so the phone can open a tenant without a round trip; the list uses a few fields.
+      tenants,
+      interactions,
+      people: people.map(({ key, row, name, phone, email, okPhone, okEmail, notes }) => ({ key, row, name, phone, email, okPhone, okEmail, notes })),
     });
   } catch (e) { next(e); }
 });

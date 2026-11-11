@@ -20,6 +20,10 @@
     return data;
   }
 
+  // A thin bar at the top while the sheet is being read or written.
+  let busyCount = 0;
+  function busy(on) { busyCount = Math.max(0, busyCount + (on ? 1 : -1)); document.body.classList.toggle('busy', busyCount > 0); }
+
   let toastTimer;
   function toast(msg) {
     $toast.textContent = msg; $toast.hidden = false;
@@ -49,6 +53,7 @@
   };
   // A fresh form: sticky answers carried over, tenant-row answers pre-filled from the tenant.
   function blankForm(t) {
+    S.tagsOpen = {};
     const st = sticky.get();
     const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: '', peopleOpen: false, primary: -1,
       people: t && t.people ? t.people.map((p) => ({ name: p.name || '', phone: p.phone || '', email: p.email || '', okPhone: !!p.okPhone, okEmail: !!p.okEmail })) : [] };
@@ -122,7 +127,13 @@
   }
   function applyState(state, focus) {
     S.error = '';
-    if (state.view === 'list') { S.view = 'list'; S.tenant = null; S.edit = null; S.editing = false; S.from = null; render(); return; }
+    if (state.view === 'list') {
+      S.view = 'list'; S.tenant = null; S.edit = null; S.editing = false; S.from = null; render();
+      // Coming back from a tenant: land on the row you left from.
+      const row = S.lastKey && $app.querySelector(`[data-open="${CSS.escape(S.lastKey)}"]`);
+      if (row) row.scrollIntoView({ block: 'center' });
+      return;
+    }
     if (state.view === 'new') {
       S.view = 'new'; S.tenant = null; S.from = null;
       const f = blankForm(null);
@@ -137,10 +148,13 @@
   window.addEventListener('popstate', (e) => { if (e.state) applyState(e.state, e.state.focus); else applyState({ view: 'list' }); });
 
   // ---- rendering ---------------------------------------------------------------
+  let lastView = null;
   function render() {
+    const entering = lastView !== S.view; lastView = S.view;
     if (S.view === 'list') $app.innerHTML = renderList();
     else if (S.view === 'tenant') $app.innerHTML = renderTenant();
     else if (S.view === 'new') $app.innerHTML = renderNew();
+    if (entering) { const el = $app.firstElementChild; if (el) el.classList.add('enter'); }
     bind();
   }
 
@@ -153,11 +167,11 @@
     const dueCount = S.tenants.filter(needsKnock).length;
 
     const items = rows.map((t) => h`
-      <li><button class="rowbtn" data-open="${esc(t.key)}">
+      <li><button class="rowbtn ${S.lastKey === t.key ? 'recent' : ''}" data-open="${esc(t.key)}">
         ${plate(t, 'md')}
         <span>
           <span class="name">${esc(t.name) || '<em>No name yet</em>'}</span>
-          <span class="meta">${esc(t.status)}${t.lastContact ? ' · last contact ' + esc(t.lastContact) : ''}</span>
+          <span class="meta">${esc(t.status)}${t.lastContact ? h` · <span class="nowrap">last contact ${esc(t.lastContact)}</span>` : ''}</span>
           <span class="meta">${statusChip(t.contactStatus)}</span>
         </span>
       </button></li>`).join('');
@@ -183,8 +197,8 @@
       <div class="screen">
         <div class="backrow"><button class="back" id="back">${S.from && S.from.view === 'new' ? '‹ Back to new unit' : '‹ All units'}</button><span class="who">Logging as ${esc(S.me)}</span></div>
         <div class="head">
-          ${plate(t, 'lg')}
-          <div class="name">${esc(t.name) || '<em>No name yet</em>'}</div>
+          <h1 class="name">${esc(t.name) || '<em>No name yet</em>'}</h1>
+          ${plate(t, 'md')}
           <div class="line">
             <span>${esc(t.status)}</span>
             ${statusChip(t.contactStatus)}
@@ -220,7 +234,12 @@
           ${t.history.length > 1 && !S.showAll ? h`<p style="margin-top:8px"><button class="linkish" id="showAll">Show all ${t.history.length}</button></p>` : ''}
         </div>
 
-        ${t.notes ? h`<div class="section"><h2>Notes</h2><p style="white-space:pre-wrap">${esc(t.notes)}</p></div>` : ''}
+        <div class="section" id="logSection">
+          <h2>Log a conversation</h2>
+          ${renderLogForm()}
+        </div>
+
+        ${t.notes ? h`<div class="section"><h2>Notes</h2><p class="detail">${esc(t.notes)}</p></div>` : ''}
 
         <div class="section">
           ${S.editable.length ? h`<details class="more" ${S.editing ? 'open' : ''} id="editDetails"><summary>Edit tenant details</summary>
@@ -231,11 +250,6 @@
             <div class="field"><label for="newName">New tenant's name</label><input class="text" id="newName" autocapitalize="words" value="${esc(S.newName || '')}"></div>
             <div class="field"><button class="btn" id="replaceTenant" ${S.replacingBusy ? 'disabled' : ''}>${S.replacingBusy ? 'Updating…' : 'Replace the tenant'}</button></div>
           </details>
-        </div>
-
-        <div class="section" id="logSection">
-          <h2>Log a conversation</h2>
-          ${renderLogForm()}
         </div>
       </div>
       <div class="fab-wrap"><button class="btn primary block" id="save" ${S.saving ? 'disabled' : ''}>${S.saving ? 'Saving…' : 'Save conversation'}</button></div>`;
@@ -269,7 +283,12 @@
     switch (q.kind) {
       case 'choice': return h`${lbl('span')}<div class="choices" data-choice="${esc(q.id)}">${choicesFor(q).map((c) => h`<button type="button" data-val="${esc(c)}" aria-pressed="${v === c}">${esc(c)}</button>`).join('')}</div>`;
       case 'select': return h`${lbl('label')}<select class="text" ${attrs}><option value="">${q.required ? 'Choose one' : 'None'}</option>${choicesFor(q).map((c) => h`<option ${v === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
-      case 'tags': return h`${lbl('span')}${tagPicker(`data-ftags="${esc(q.id)}"`, v || [], choicesFor(q), q.grouped)}`;
+      case 'tags': {
+        // Closed: just the chosen chips and an Add button, so thirty options don't push the rest of the form off screen.
+        const open = S.tagsOpen && S.tagsOpen[q.id];
+        if (open) return h`${lbl('span')}${tagPicker(`data-ftags="${esc(q.id)}"`, v || [], choicesFor(q), q.grouped)}`;
+        return h`${lbl('span')}<div class="choices tags" data-ftags="${esc(q.id)}">${(v || []).map((c) => h`<button type="button" data-val="${esc(c)}" aria-pressed="true">${esc(c)}</button>`).join('')}<button type="button" class="add" data-tags-open="${esc(q.id)}">+ ${(v || []).length ? 'Add' : 'Add ' + q.label.toLowerCase()}</button></div>`;
+      }
       case 'checkbox': return h`<label class="toggle"><input type="checkbox" data-q="${esc(q.id)}" ${v ? 'checked' : ''}> ${esc(q.label)}${q.hint ? h` <span class="hint">${esc(q.hint)}</span>` : ''}</label>`;
       case 'textarea': return h`${lbl('label')}<textarea class="textarea" ${attrs}>${esc(v)}</textarea>`;
       case 'date': return h`${lbl('label')}<input class="text" type="date" ${attrs} value="${esc(v)}">`;
@@ -415,7 +434,7 @@
       }));
     });
     $app.querySelectorAll('[data-ftags]').forEach((group) => {
-      group.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      group.querySelectorAll('button[data-val]').forEach((b) => b.addEventListener('click', () => {
         const arr = S.form[group.dataset.ftags];
         const i = arr.indexOf(b.dataset.val);
         if (i === -1) arr.push(b.dataset.val); else arr.splice(i, 1);
@@ -481,6 +500,10 @@
       else el.addEventListener('input', () => { p()[el.dataset.pf] = el.value; });
     });
     $app.querySelectorAll('[data-primary]').forEach((el) => el.addEventListener('change', () => { if (el.checked) S.form.primary = parseInt(el.dataset.primary, 10); }));
+    $app.querySelectorAll('[data-tags-open]').forEach((b) => b.addEventListener('click', () => {
+      S.tagsOpen = S.tagsOpen || {}; S.tagsOpen[b.dataset.tagsOpen] = true; render();
+      const el = $app.querySelector(`[data-ftags="${CSS.escape(b.dataset.tagsOpen)}"]`); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }));
     on('#save', 'click', save);
     on('#saveEdit', 'click', saveEdit);
     $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', async () => {
@@ -489,13 +512,35 @@
     }));
   }
 
+  // What the server's /api/tenant returns, assembled from what bootstrap already sent.
+  function localTenant(key) {
+    const t = S.tenants.find((x) => x.key === key);
+    if (!t) return null;
+    const history = (S.interactions || []).filter((x) => x.key === key).slice().reverse();
+    const people = (S.people || []).filter((x) => x.key === key);
+    return { ...t, history, people };
+  }
+
+  // Open instantly from local data, then quietly refresh from the sheet in case someone else logged something.
   async function openTenant(key, keepForm, keepType) {
-    try {
-      const t = await api('/api/tenant/' + encodeURIComponent(key));
-      S.tenant = t; S.view = 'tenant'; S.showAll = false; S.error = '';
+    const local = localTenant(key);
+    const show = (t) => {
+      S.tenant = t; S.view = 'tenant'; S.error = ''; S.lastKey = key;
       if (!keepForm) { S.form = blankForm(t); if (keepType) Object.assign(S.form, keepType); S.edit = null; S.editing = false; }
       render(); window.scrollTo(0, 0);
-    } catch (e) { toast(e.message); }
+    };
+    if (local) { S.showAll = false; show(local); }
+    busy(true);
+    try {
+      const t = await api('/api/tenant/' + encodeURIComponent(key));
+      if (!local) { S.showAll = false; show(t); }
+      else if (S.view === 'tenant' && S.tenant && S.tenant.key === key) {
+        // Only the read-only parts refresh; whatever the canvasser is typing stays.
+        const changed = JSON.stringify([t.history, t.people, t.notes, t.status]) !== JSON.stringify([S.tenant.history, S.tenant.people, S.tenant.notes, S.tenant.status]);
+        S.tenant = t; if (changed) render();
+      }
+    } catch (e) { if (!local) toast(e.message); }
+    finally { busy(false); }
   }
 
   async function save() {
@@ -508,7 +553,7 @@
       if (p.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) { S.error = `${p.name.trim() || 'The other person'}'s email doesn't look right.`; break; }
     }
     if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
-    S.saving = true; render();
+    S.saving = true; render(); busy(true);
     try {
       const chosen = f.primary >= 0 && f.people[f.primary] && f.people[f.primary].name.trim() ? f.people[f.primary].name.trim() : '';
       const r = await api('/api/interaction', { ...f, people: f.people.filter((p) => p.name.trim()), makePrimary: chosen });
@@ -518,6 +563,7 @@
       await refreshList();
       go({ view: 'tenant', key: r.key }, { replace: true });
     } catch (e) { S.saving = false; S.error = e.message; render(); }
+    finally { busy(false); }
   }
 
   async function saveEdit() {
@@ -532,7 +578,7 @@
 
   async function refreshList() {
     const b = await api('/api/bootstrap');
-    S.me = b.me; S.appName = b.appName; S.lists = b.lists; S.tenants = b.tenants;
+    S.me = b.me; S.appName = b.appName; S.lists = b.lists; S.tenants = b.tenants; S.interactions = b.interactions || []; S.people = b.people || [];
     S.features = b.features || {}; S.formSpec = b.form || []; S.tagGroups = b.tagGroups || []; S.editable = b.editable || [];
     document.title = `${S.appName} canvass`;
   }

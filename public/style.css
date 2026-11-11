@@ -114,7 +114,8 @@ a { color: inherit; }
 .backrow .who { font-size: 14px; color: var(--ink-2); }
 .back { display: inline-flex; align-items: center; gap: 6px; height: var(--tap); background: none; border: 0; padding: 0; font-weight: 600; color: var(--ink-2); }
 .head { padding: 4px 0 12px; border-bottom: 2px solid var(--ink); }
-.head .name { font-size: 22px; font-weight: 600; margin-top: 6px; }
+.head h1.name { font-size: 30px; line-height: 1.15; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 6px; }
+.head h1.name em { font-weight: 500; color: var(--ink-2); }
 .head .line { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 15px; color: var(--ink-2); }
 .section { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .section h2 { font-size: 15px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
@@ -203,3 +204,15 @@ body.gate { background: var(--surface); }
 .people .person { padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 10px; }
 .people .person > label { display: block; font-weight: 600; margin-bottom: 6px; }
 .people .person .contact-pair { margin-top: 10px; }
+
+/* Feedback while the sheet is read or written: a thin bar across the top */
+body.busy::before { content: ""; position: fixed; top: 0; left: 0; height: 3px; width: 40%; background: var(--ink); z-index: 50; animation: busybar 1s ease-in-out infinite; }
+@keyframes busybar { 0% { left: -40%; } 100% { left: 100%; } }
+/* Screens slide in a touch so a tap visibly leads somewhere */
+.enter { animation: enter 160ms ease-out; }
+@keyframes enter { from { opacity: 0.4; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* The row you came back from */
+.rowbtn.recent { background: var(--surface); box-shadow: inset 4px 0 0 var(--ink); }
+/* "+ Add" chip in a closed tag picker */
+.choices.tags button.add { border-style: dashed; color: var(--ink-2); }
+.nowrap { white-space: nowrap; }
