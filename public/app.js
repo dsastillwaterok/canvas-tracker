@@ -3,7 +3,7 @@
   const $toast = document.getElementById('toast');
 
   const S = {
-    me: '', appName: '', lists: null, tenants: [], features: {}, formSpec: [], tagGroups: [], editable: [],
+    me: '', appName: '', lists: null, tenants: [], features: {}, formSpec: [], tagGroups: [], editable: [], problems: {},
     view: 'list', q: '', onlyDue: false,
     tenant: null, showAll: false, editing: false,
     form: null, saving: false, error: '',
@@ -64,7 +64,7 @@
   };
   // A fresh form: sticky answers carried over, tenant-row answers pre-filled from the tenant.
   function blankForm(t) {
-    S.tagsOpen = {};
+    S.tagsOpen = {}; S.problems = {};
     const st = sticky.get();
     const f = { building: t ? t.building : (st.building || ''), unit: t ? t.unit : '', who: t && t.name ? t.name : '', whoOther: false, peopleOpen: false, primary: -1,
       people: t && t.people ? t.people.map((p) => ({ name: p.name || '', phone: p.phone || '', email: p.email || '', okPhone: !!p.okPhone, okEmail: !!p.okEmail })) : [] };
@@ -84,7 +84,8 @@
       if (q.required && empty) return (q.kind === 'choice' || q.kind === 'select') ? `Pick ${q.label.toLowerCase()}.` : q.kind === 'tags' ? `Pick at least one under ${q.label}.` : `${q.label} is required.`;
       if (empty) continue;
       const s = String(v).trim();
-      if (q.kind === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return `${q.label} doesn't look like an email address.`;
+      if (q.kind === 'email' && !Contact.email(s).ok) return `${q.label}: ${Contact.email(s).error}`;
+      if (q.kind === 'tel' && !Contact.phone(s).ok) return `${q.label}: ${Contact.phone(s).error}`;
       if (q.kind === 'number' && !/^-?\d+(\.\d+)?$/.test(s)) return `${q.label} needs a number.`;
       if (q.pattern && !['checkbox', 'tags'].includes(q.kind)) { try { if (!new RegExp(q.pattern).test(s)) return q.patternHint || `${q.label} isn't in the expected format.`; } catch { /* bad pattern: server decides */ } }
     }
@@ -301,6 +302,47 @@
       ${other ? h`<input class="text" id="whoOther" data-q="who" autocomplete="off" autocapitalize="words" placeholder="Their name" value="${esc(f.who)}" style="margin-top:8px">` : ''}`;
   }
 
+
+  // Phone and email are checked when the canvasser leaves the box: a valid number is tidied in place,
+  // a bad one gets a message under it, a likely typo in an email domain gets a one-tap fix.
+  const fieldNote = (id) => {
+    const pr = S.problems[id];
+    if (!pr) return '';
+    if (pr.error) return h`<div class="field-err" id="note_${id}">${esc(pr.error)}</div>`;
+    if (pr.hint) return h`<div class="field-hint" id="note_${id}">${esc(pr.hint)} <button type="button" class="linklike" data-fix="${id}" data-fix-value="${esc(pr.suggestion)}">Yes, use that</button></div>`;
+    return '';
+  };
+  function checkContact(el, kind, apply) {
+    const r = kind === 'tel' ? Contact.phone(el.value) : Contact.email(el.value);
+    const id = el.id;
+    if (r.ok) { if (el.value !== r.value) { el.value = r.value; apply(r.value); } S.problems[id] = r.hint ? { hint: r.hint, suggestion: r.suggestion } : null; }
+    else S.problems[id] = { error: r.error };
+    // Swap the note under the field without re-rendering the whole screen (keeps focus where it is).
+    const old = document.getElementById('note_' + id); if (old) old.remove();
+    const html = fieldNote(id);
+    if (html) el.insertAdjacentHTML('afterend', html);
+  }
+  // "Yes, use that" under an email box, wherever it was rendered.
+  $app.addEventListener('click', (e) => {
+    const fix = e.target.closest('[data-fix]'); if (!fix) return;
+    const el = document.getElementById(fix.dataset.fix); if (!el) return;
+    el.value = fix.dataset.fixValue; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('blur'));
+  });
+  function bindContactChecks() {
+    $app.querySelectorAll('input[type="tel"], input[type="email"]').forEach((el) => {
+      const kind = el.type;
+      const apply = (v) => {
+        if (el.dataset.q) S.form[el.dataset.q] = v;
+        else if (el.dataset.p !== undefined) S.form.people[parseInt(el.dataset.p, 10)][el.dataset.pf] = v;
+        else if (el.id === 'e_phone') S.edit.phone = v;
+        else if (el.id === 'e_email') S.edit.email = v;
+      };
+      el.addEventListener('blur', () => checkContact(el, kind, apply));
+      el.addEventListener('input', () => { if (S.problems[el.id] && S.problems[el.id].error) { S.problems[el.id] = null; const n = document.getElementById('note_' + el.id); if (n) n.remove(); } });
+    });
+  }
+  const anyContactProblem = () => Object.values(S.problems).some((p) => p && p.error);
+
   function renderQuestion(q, f) {
     if (q.id === 'who' && S.tenant) return nobodyAnswered(f) ? '' : renderWho(q, f);
     const id = 'f_' + q.id.replace(/[^a-z0-9]/gi, '_');
@@ -320,8 +362,8 @@
       case 'textarea': return h`${lbl('label')}<textarea class="textarea" ${attrs}>${esc(v)}</textarea>`;
       case 'date': return h`${lbl('label')}<input class="text" type="date" ${attrs} value="${esc(v)}">`;
       case 'number': return h`${lbl('label')}<input class="text" type="text" inputmode="decimal" ${attrs} value="${esc(v)}">`;
-      case 'tel': return h`${lbl('label')}<input class="text" type="tel" ${attrs} value="${esc(v)}">`;
-      case 'email': return h`${lbl('label')}<input class="text" type="email" autocapitalize="off" ${attrs} value="${esc(v)}">`;
+      case 'tel': return h`${lbl('label')}<input class="text" type="tel" ${attrs} value="${esc(v)}">${fieldNote(id)}`;
+      case 'email': return h`${lbl('label')}<input class="text" type="email" autocapitalize="off" ${attrs} value="${esc(v)}">${fieldNote(id)}`;
       default: return h`${lbl('label')}<input class="text" type="text" autocomplete="off" ${attrs} value="${esc(v)}">`;
     }
   }
@@ -341,9 +383,9 @@
         <label for="p_name_${i}">Name</label><input class="text" id="p_name_${i}" data-p="${i}" data-pf="name" autocapitalize="words" value="${esc(p.name)}">
         ${main ? h`<label class="toggle"><input type="radio" name="primary" data-primary="${i}" ${f.primary === i ? 'checked' : ''}> Make this person the main contact <span class="hint">swaps with ${esc(main)}</span></label>` : ''}
         <div class="contact-pair">
-          <div class="contact"><label for="p_phone_${i}">Phone</label><input class="text" id="p_phone_${i}" type="tel" data-p="${i}" data-pf="phone" value="${esc(p.phone)}">
+          <div class="contact"><label for="p_phone_${i}">Phone</label><input class="text" id="p_phone_${i}" type="tel" data-p="${i}" data-pf="phone" value="${esc(p.phone)}">${fieldNote('p_phone_' + i)}
             <label class="toggle"><input type="checkbox" data-p="${i}" data-pf="okPhone" ${p.okPhone ? 'checked' : ''}> OK to call or text</label></div>
-          <div class="contact"><label for="p_email_${i}">Email</label><input class="text" id="p_email_${i}" type="email" autocapitalize="off" data-p="${i}" data-pf="email" value="${esc(p.email)}">
+          <div class="contact"><label for="p_email_${i}">Email</label><input class="text" id="p_email_${i}" type="email" autocapitalize="off" data-p="${i}" data-pf="email" value="${esc(p.email)}">${fieldNote('p_email_' + i)}
             <label class="toggle"><input type="checkbox" data-p="${i}" data-pf="okEmail" ${p.okEmail ? 'checked' : ''}> OK to email</label></div>
         </div></div>`).join('')}
       <button type="button" class="btn quiet" id="personAdd">Add another person</button>
@@ -398,11 +440,11 @@
       ${can('phone') || can('email') || can('okPhone') || can('okEmail') ? h`<div class="field"><span class="lbl">Contact info <span class="hint">the box means they said we may use it</span></span>
         <div class="contact-pair">
           ${can('phone') || can('okPhone') ? h`<div class="contact">
-            ${can('phone') ? h`<label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}">` : ''}
+            ${can('phone') ? h`<label for="e_phone">Phone</label><input class="text" id="e_phone" type="tel" value="${esc(e.phone)}">${fieldNote('e_phone')}` : ''}
             ${can('okPhone') ? h`<label class="toggle"><input type="checkbox" id="e_okPhone" ${e.okPhone ? 'checked' : ''}> OK to call or text</label>` : ''}
           </div>` : ''}
           ${can('email') || can('okEmail') ? h`<div class="contact">
-            ${can('email') ? h`<label for="e_email">Email</label><input class="text" id="e_email" type="email" value="${esc(e.email)}">` : ''}
+            ${can('email') ? h`<label for="e_email">Email</label><input class="text" id="e_email" type="email" autocapitalize="off" value="${esc(e.email)}">${fieldNote('e_email')}` : ''}
             ${can('okEmail') ? h`<label class="toggle"><input type="checkbox" id="e_okEmail" ${e.okEmail ? 'checked' : ''}> OK to email</label>` : ''}
           </div>` : ''}
         </div></div>` : ''}
@@ -543,6 +585,7 @@
       S.tagsOpen = S.tagsOpen || {}; S.tagsOpen[b.dataset.tagsOpen] = true; render();
       const el = $app.querySelector(`[data-ftags="${CSS.escape(b.dataset.tagsOpen)}"]`); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }));
+    bindContactChecks();
     on('#save', 'click', save);
     on('#saveEdit', 'click', saveEdit);
     $app.querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', async () => {
@@ -587,11 +630,14 @@
   async function save() {
     const f = S.form;
     S.error = '';
+    $app.querySelectorAll('input[type="tel"], input[type="email"]').forEach((el) => el.dispatchEvent(new Event('blur')));
     if (S.view === 'new' && !f.unit.trim()) S.error = 'Enter the apartment number.';
+    else if (anyContactProblem()) S.error = 'Fix the phone number or email marked above.';
     else S.error = validateForm(f) || '';
     if (!S.error) for (const p of f.people) {
       if (!p.name.trim() && (p.phone.trim() || p.email.trim() || p.okPhone || p.okEmail)) { S.error = 'Give the other person a name, or clear their details.'; break; }
-      if (p.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim())) { S.error = `${p.name.trim() || 'The other person'}'s email doesn't look right.`; break; }
+      if (!Contact.email(p.email).ok) { S.error = `${p.name.trim() || 'The other person'}'s email: ${Contact.email(p.email).error}`; break; }
+      if (!Contact.phone(p.phone).ok) { S.error = `${p.name.trim() || 'The other person'}'s phone: ${Contact.phone(p.phone).error}`; break; }
     }
     if (S.error) { render(); $app.querySelector('.err').scrollIntoView({ block: 'center' }); return; }
     S.saving = true; render(); busy(true); wait('Saving…');
@@ -608,6 +654,8 @@
   }
 
   async function saveEdit() {
+    $app.querySelectorAll('#e_phone, #e_email').forEach((el) => el.dispatchEvent(new Event('blur')));
+    if (anyContactProblem()) { toast('Fix the phone number or email first.'); return; }
     wait('Saving details…');
     try {
       const payload = {};

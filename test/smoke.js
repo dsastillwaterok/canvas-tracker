@@ -174,6 +174,25 @@ const seed = require('./seed');
   assert.strictEqual(back.appName, config.appName);
   assert.strictEqual(await setup.readSheetConfig(new MockStore({ Sheet1: [] })), null);
 
+  // ---- phone and email checks (shared with the phone) ----------------------------
+  const contact = require('../lib/contact');
+  assert.strictEqual(contact.phone('405 555 0100').value, '(405) 555-0100');
+  assert.strictEqual(contact.phone('+1 405-555-0100 x7').value, '(405) 555-0100 x7');
+  assert.strictEqual(contact.phone('+44 20 7946 0958').value, '+442079460958');
+  assert.match(contact.phone('555-0100').error, /7 digits/);
+  assert.match(contact.phone('0405550100').error, /area code/);
+  assert.match(contact.phone('call me').error, /only have digits/);
+  assert.strictEqual(contact.phone('').ok, true);
+  assert.strictEqual(contact.email(' Jane.Doe@Example.ORG ').value, 'Jane.Doe@example.org');
+  assert.strictEqual(contact.email('jane@gmial.com').suggestion, 'jane@gmail.com');
+  assert.match(contact.email('jane@x').error, /domain/);
+  assert.match(contact.email('jane doe@x.com').error, /spaces/);
+  assert.match(contact.email('jane@@x.com').error, /exactly one @/);
+  // A phone typed loosely is stored tidy; a bad one is refused before anything is written.
+  await tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', phone: '405.555.0177' });
+  assert.strictEqual((await tr.tenant('8663-13')).phone, '(405) 555-0177');
+  await assert.rejects(tr.logInteraction({ building: '8663', unit: '13', canvasser: 'Ben K', type: 'Text', response: 'Talked', email: 'nope@' }), /Email:.*domain/);
+
   // ---- the door form definition ------------------------------------------------
   const formLib = require('../lib/form');
   const legacy = formLib.formSpec({ formFields: ['who', 'phone'], extraFields: [{ header: 'Photo?', kind: 'textarea' }] });

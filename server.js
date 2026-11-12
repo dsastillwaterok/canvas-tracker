@@ -8,6 +8,7 @@ const setup = require('./lib/setup');
 const admin = require('./lib/admin');
 const auth = require('./lib/auth');
 const form = require('./lib/form');
+const contact = require('./lib/contact');
 const { mailer } = require('./lib/mail');
 
 const PORT = process.env.PORT || 3000;
@@ -69,6 +70,7 @@ app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
 // Revalidate on every load (ETag 304s are cheap); a canvasser's phone must never run a stale app.js.
 app.use('/static', express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: true, lastModified: true }));
+app.get('/static/contact.js', (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'lib', 'contact.js')));
 const VERSION = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_SHA || 'dev').slice(0, 7);
 app.use('/admin', admin.router(ctx));
 
@@ -250,7 +252,10 @@ app.post('/api/interaction', requireCanvasser, async (req, res, next) => {
     if (problem) return res.status(400).json({ error: problem });
     for (const p of (Array.isArray(req.body.people) ? req.body.people : [])) {
       if (!String(p.name || '').trim()) return res.status(400).json({ error: 'Each other person needs a name.' });
-      if (String(p.email || '').trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(p.email).trim())) return res.status(400).json({ error: `${p.name}'s email doesn't look like an email address.` });
+      const e = contact.email(p.email), ph = contact.phone(p.phone);
+      if (!e.ok) return res.status(400).json({ error: `${p.name}'s email: ${e.error}` });
+      if (!ph.ok) return res.status(400).json({ error: `${p.name}'s phone: ${ph.error}` });
+      p.email = e.value; p.phone = ph.value;
     }
     const result = await ctx.tracker.logInteraction({ ...req.body, canvasser: req.canvasser });
     res.json({ ...result, tenant: await ctx.tracker.tenant(result.key) });
@@ -261,7 +266,12 @@ app.post('/api/interaction', requireCanvasser, async (req, res, next) => {
 });
 
 app.post('/api/tenant/:key', requireCanvasser, async (req, res, next) => {
-  try { res.json(await ctx.tracker.updateTenant(req.params.key, req.body || {})); }
+  try {
+    const b = req.body || {};
+    if ('phone' in b) { const r = contact.phone(b.phone); if (!r.ok) return res.status(400).json({ error: `Phone: ${r.error}` }); b.phone = r.value; }
+    if ('email' in b) { const r = contact.email(b.email); if (!r.ok) return res.status(400).json({ error: `Email: ${r.error}` }); b.email = r.value; }
+    res.json(await ctx.tracker.updateTenant(req.params.key, b));
+  }
   catch (e) { if (/No tenant/.test(e.message)) return res.status(404).json({ error: e.message }); next(e); }
 });
 
