@@ -505,8 +505,10 @@
     });
     const who = $app.querySelector('[data-who]');
     if (who) who.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      // A name typed under "Someone else" survives a detour through the other buttons.
+      if (S.form.whoOther && S.form.who) S.form.whoTyped = S.form.who;
       S.form.whoOther = b.dataset.val === '';
-      S.form.who = b.dataset.val;
+      S.form.who = S.form.whoOther ? (S.form.whoTyped || '') : b.dataset.val;
       const y = window.scrollY; render(); window.scrollTo(0, y);
       if (S.form.whoOther) { const el = $app.querySelector('#whoOther'); if (el) el.focus(); }
     }));
@@ -534,7 +536,7 @@
     });
     $app.querySelectorAll('[data-q]').forEach((el) => {
       if (el.type === 'checkbox') el.addEventListener('change', () => { S.form[el.dataset.q] = el.checked; });
-      else el.addEventListener('input', () => { S.form[el.dataset.q] = el.value; });
+      else el.addEventListener('input', () => { S.form[el.dataset.q] = el.value; if (el.id === 'whoOther') S.form.whoTyped = el.value; });
     });
     $app.querySelectorAll('[data-combo]').forEach((input) => {
       const field = input.dataset.combo;
