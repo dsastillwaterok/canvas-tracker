@@ -149,11 +149,11 @@
     }
     if (state.view === 'new') {
       S.view = 'new'; S.tenant = null; S.from = null;
-      const f = blankForm(null);
-      if (state.building !== undefined) f.building = state.building;
-      if (state.unit !== undefined) f.unit = state.unit;
+      // Coming back from a tenant you tapped by mistake: everything you'd typed is still there.
+      const f = state.draft && S.newDraft ? S.newDraft : blankForm(null);
+      if (!state.draft) { if (state.building !== undefined) f.building = state.building; if (state.unit !== undefined) f.unit = state.unit; }
       S.form = f; render(); window.scrollTo(0, 0);
-      if (focus) { const el = $app.querySelector('#' + focus); if (el) el.focus(); }
+      if (focus) { const el = $app.querySelector('#' + focus); if (el) { el.focus(); if (el.setSelectionRange) el.setSelectionRange(el.value.length, el.value.length); } }
       return;
     }
     if (state.view === 'tenant') { S.from = state.from || null; openTenant(state.key, false, state.keepType); }
@@ -209,6 +209,7 @@
     return h`
       <div class="screen">
         <div class="backrow"><button class="back" id="back">${S.from && S.from.view === 'new' ? '‹ Back to new unit' : '‹ All units'}</button><span class="who">Logging as ${esc(S.me)}</span></div>
+        ${S.from && S.from.view === 'new' ? renderTabs('existing', t, S.from.who) : ''}
         <div class="head">
           <h1 class="name">${esc(t.name) || '<em>No name yet</em>'}</h1>
           ${plate(t, 'md')}
@@ -273,7 +274,8 @@
     return h`
       <div class="screen">
         <div class="backrow"><button class="back" id="back">‹ All units</button><span class="who">Logging as ${esc(S.me)}</span></div>
-        <div class="head"><span class="plate lg">New unit</span></div>
+        ${renderTabs('new', matchingTenant(f), (f.who || '').trim())}
+        <div class="head"><span class="plate lg">${matchingTenant(f) ? 'Someone new at ' + esc(matchingTenant(f).key) : 'New unit'}</span></div>
         ${hasB() ? h`<div class="field"><label for="building">Building <span class="hint">the number on the outside; new ones are added to the list</span></label>
           ${combo('building', 'building', f.building, 'e.g. 8659', 'inputmode="numeric"')}</div>` : ''}
         <div class="field"><label for="unit">Apartment number <span class="hint">pick an existing unit or type a new one</span></label>
@@ -545,18 +547,20 @@
       };
       input.addEventListener('focus', showList);
       input.addEventListener('input', () => { S.form[field] = input.value; showList(); });
+      if (S.view === 'new') input.addEventListener('blur', () => setTimeout(() => {
+        // The tab bar depends on what's typed; refresh it without disturbing the rest of the form.
+        const wanted = renderTabs('new', matchingTenant(S.form), (S.form.who || '').trim());
+        const cur = $app.querySelector('.tabs');
+        if ((cur ? cur.outerHTML : '') !== wanted) { const y = window.scrollY; render(); window.scrollTo(0, y); }
+      }, 200));
       input.addEventListener('blur', () => setTimeout(() => { list.hidden = true; }, 150));
       list.addEventListener('mousedown', (e) => {
         const li = e.target.closest('li'); if (!li) return;
-        e.preventDefault(); input.value = li.dataset.val; S.form[field] = li.dataset.val; list.hidden = true;
+        e.preventDefault();
         // Picking a person or a unit that already exists means "add a conversation there", not a new row.
         const existing = li.dataset.key ? S.tenants.find((t) => t.key === li.dataset.key) : null;
-        if (existing && S.view === 'new') {
-          // Leave the new-unit screen in history with building and unit, name cleared and focused, for a mis-tap.
-          history.replaceState({ view: 'new', building: S.form.building, unit: field === 'who' ? S.form.unit : '', focus: 'who' }, '', '#new');
-          go({ view: 'tenant', key: existing.key, from: { view: 'new' }, keepType: stickyValues(S.form) });
-          return;
-        }
+        if (existing && S.view === 'new') { list.hidden = true; leaveNewFor(existing, field); return; }
+        input.value = li.dataset.val; S.form[field] = li.dataset.val; list.hidden = true;
         if (field === 'building') { const u = $app.querySelector('[data-combo="unit"]'); if (u) u.focus(); }
       });
     });
@@ -585,6 +589,11 @@
       S.tagsOpen = S.tagsOpen || {}; S.tagsOpen[b.dataset.tagsOpen] = true; render();
       const el = $app.querySelector(`[data-ftags="${CSS.escape(b.dataset.tagsOpen)}"]`); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }));
+    $app.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+      if (b.classList.contains('active')) return;
+      if (b.dataset.tab === 'new') history.back(); // the draft is restored by the history state
+      else { const ex = matchingTenant(S.form); if (ex) leaveNewFor(ex, 'who'); }
+    }));
     bindContactChecks();
     on('#save', 'click', save);
     on('#saveEdit', 'click', saveEdit);
@@ -594,6 +603,26 @@
       catch (e) { toast(e.message); }
       finally { wait(null); }
     }));
+  }
+
+  // From the new-unit screen to a tenant who already exists. The draft (what was typed, name included)
+  // stays in memory so Back brings it all back; the tenant screen shows both as tabs.
+  function leaveNewFor(existing, focusField) {
+    S.newDraft = S.form;
+    history.replaceState({ view: 'new', draft: true, focus: focusField || 'who' }, '', '#new');
+    go({ view: 'tenant', key: existing.key, from: { view: 'new', who: (S.form.who || '').trim() }, keepType: stickyValues(S.form) });
+  }
+  // The existing tenant for what's typed on the new-unit screen, if any.
+  const matchingTenant = (f) => S.tenants.find((t) => t.key === makeKey(f.building, f.unit)) || null;
+  const makeKey = (b, u) => ((b || '').trim() ? (b || '').trim() + '-' : '') + (u || '').trim();
+
+  // Tabs shown when a canvasser is between an existing tenant and someone new in the same unit.
+  function renderTabs(active, existing, draftWho) {
+    if (!existing || !draftWho || draftWho.toLowerCase() === (existing.name || '').toLowerCase()) return '';
+    return h`<div class="tabs" role="tablist">
+      <button type="button" class="tab ${active === 'existing' ? 'active' : ''}" role="tab" aria-selected="${active === 'existing'}" data-tab="existing">${esc(existing.name || existing.key)} <span class="hint">on file</span></button>
+      <button type="button" class="tab ${active === 'new' ? 'active' : ''}" role="tab" aria-selected="${active === 'new'}" data-tab="new">${esc(draftWho)} <span class="hint">new</span></button>
+    </div>`;
   }
 
   // What the server's /api/tenant returns, assembled from what bootstrap already sent.

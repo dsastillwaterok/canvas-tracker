@@ -230,3 +230,9 @@ body.busy::before { content: ""; position: fixed; top: 0; left: 0; height: 3px; 
 .field-err { color: var(--stop); font-size: 14px; font-weight: 600; margin-top: 6px; }
 .field-hint { color: var(--ink-2); font-size: 14px; margin-top: 6px; }
 .linklike { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--ink); text-decoration: underline; cursor: pointer; }
+
+/* Existing tenant vs someone new in the same unit */
+.tabs { display: flex; gap: 6px; margin: 4px 0 12px; border-bottom: 2px solid var(--line); }
+.tab { flex: 1; min-height: var(--tap); background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; font: inherit; font-weight: 600; font-size: 16px; color: var(--ink-2); padding: 8px 6px; cursor: pointer; }
+.tab .hint { display: block; font-weight: 400; font-size: 13px; }
+.tab.active { color: var(--ink); border-bottom-color: var(--ink); }
